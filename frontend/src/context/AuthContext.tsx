@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
+import { api } from '../lib/api';
 
 export type UserRole = 'citizen' | 'employee' | 'department';
 
@@ -30,7 +31,7 @@ interface AuthContextType {
   profile: AuthProfile | null;
   session: Session | null;
   loading: boolean;
-  signInWithGoogle: (role?: 'citizen' | 'employee', customEmail?: string, customName?: string) => Promise<void>;
+  signInWithGoogle: (role?: 'citizen' | 'employee', customEmail?: string, customName?: string, municipalityCode?: string, ward?: string, address?: string) => Promise<void>;
   loginAsCitizen: (email?: string, name?: string, phone?: string, municipalCorporation?: string, ward?: string, address?: string) => void;
   loginAsDepartment: (corporationId: string, corporationName?: string, departmentWing?: string) => void;
   loginAsEmployee: (employeeCode: string, name?: string, department?: string, designation?: string) => void;
@@ -228,13 +229,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async (
     role: 'citizen' | 'employee' = 'citizen',
     customEmail?: string,
-    customName?: string
+    customName?: string,
+    municipalityCode = 'ELR',
+    ward = '',
+    address = ''
   ) => {
     if (customEmail) {
       if (role === 'employee') {
         loginAsEmployee('EMP-101', customName || 'A. Ramesh Kumar (Google Workspace)', 'road', 'Superintending Engineer (R&B)');
       } else {
-        loginAsCitizen(customEmail, customName || customEmail.split('@')[0], '+91 98480 12345');
+        loginAsCitizen(customEmail, customName || customEmail.split('@')[0], '+91 98480 12345', municipalityCode, ward, address);
+        try {
+          await api.registerCitizen({
+            email: customEmail,
+            name: customName || customEmail.split('@')[0],
+            password: 'google_oauth_verified',
+            phone: '+91 98480 12345',
+            municipality_code: municipalityCode,
+            ward: ward,
+            address: address
+          });
+        } catch {}
       }
       return;
     }
@@ -243,7 +258,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/login`
+          redirectTo: `${window.location.origin}/login`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account'
+          }
         }
       });
       if (error) {
@@ -254,7 +273,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (role === 'employee') {
         loginAsEmployee('EMP-101', 'A. Ramesh Kumar (Google Workspace)', 'road', 'Superintending Engineer (R&B)');
       } else {
-        loginAsCitizen('pranaysai.koppineedi@gmail.com', 'Google Verified Citizen', '+91 98480 12345');
+        const citizenEmail = 'pranaysai.koppineedi@gmail.com';
+        const citizenName = 'Pranay Sai Koppineedi (Google Verified)';
+        loginAsCitizen(citizenEmail, citizenName, '+91 98480 12345', municipalityCode, ward, address);
+        try {
+          await api.registerCitizen({
+            email: citizenEmail,
+            name: citizenName,
+            password: 'google_oauth_verified',
+            phone: '+91 98480 12345',
+            municipality_code: municipalityCode,
+            ward: ward,
+            address: address
+          });
+        } catch {}
       }
     }
   };
