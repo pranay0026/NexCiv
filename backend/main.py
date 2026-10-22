@@ -6,6 +6,15 @@ backend_dir = Path(__file__).resolve().parent
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
+try:
+    from dotenv import load_dotenv
+    env_file = backend_dir / ".env"
+    if env_file.exists():
+        load_dotenv(env_file)
+    load_dotenv()
+except Exception:
+    pass
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import complaints, classify, employees, auth

@@ -11,7 +11,7 @@ from auth import get_current_user, get_optional_current_user
 from classifier import get_classifier, ComplaintClassifier, DEPARTMENTS
 from vision_engine import get_vision_engine
 from clustering import get_clustering_engine
-from notifications import send_complaint_acknowledgment
+from notifications import send_complaint_acknowledgment, send_complaint_resolution
 from schemas import (
     ComplaintCreate, ComplaintResponse, StatusUpdateRequest,
     ComplaintAssignRequest, DuplicateCheckRequest, DuplicateCheckResponse,
@@ -866,14 +866,26 @@ def update_complaint_status(
                     # Enrich with local resolution proof and notes
                     item["resolution_notes"] = updated_record.get("resolution_notes")
                     item["resolution_proof_url"] = updated_record.get("resolution_proof_url")
-                return item
+                    if not item.get("citizen_email"):
+                        item["citizen_email"] = updated_record.get("citizen_email")
+                final_result = item
         except Exception as e:
             print(f"Supabase complaint status update note: {e}")
 
-    if updated_record:
-        return updated_record
+    if not final_result and updated_record:
+        final_result = updated_record
 
-    raise HTTPException(status_code=404, detail="Complaint not found")
+    if not final_result:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+
+    # Automated Grievance Resolution Email Notice
+    if new_status == "resolved":
+        try:
+            send_complaint_resolution(final_result)
+        except Exception as res_err:
+            print(f"Resolution notification dispatch note: {res_err}")
+
+    return final_result
 
 
 @router.patch("/{complaint_id}/assign", response_model=ComplaintResponse)

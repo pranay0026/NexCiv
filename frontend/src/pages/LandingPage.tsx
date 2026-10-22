@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api, AP_CORPORATIONS } from '../lib/api';
@@ -86,8 +86,18 @@ export default function LandingPage() {
   const [ward, setWard] = useState(profile?.ward || '');
   const [landmark, setLandmark] = useState('');
   const [citizenName, setCitizenName] = useState(profile?.name || '');
+  const [citizenEmail, setCitizenEmail] = useState(profile?.email || 'pranaykoppineedi@gmail.com');
   const [citizenPhone, setCitizenPhone] = useState(profile?.phone || '');
   const [imagesList, setImagesList] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (profile?.email && citizenEmail === 'pranaykoppineedi@gmail.com') {
+      setCitizenEmail(profile.email);
+    }
+    if (profile?.name && !citizenName) {
+      setCitizenName(profile.name);
+    }
+  }, [profile]);
 
   const [location, setLocation] = useState('');
   const [locationLat, setLocationLat] = useState<number | null>(null);
@@ -318,7 +328,7 @@ export default function LandingPage() {
         ward: ward || undefined,
         landmark: landmark || undefined,
         citizen_name: citizenName || profile?.name || 'Citizen',
-        citizen_email: profile?.email || 'citizen@nexciv.org',
+        citizen_email: citizenEmail.trim() || profile?.email || 'pranaykoppineedi@gmail.com',
         citizen_phone: citizenPhone || profile?.phone || undefined,
         priority: priority || 'Medium',
         priority_score: priorityScore || 50,
@@ -364,7 +374,7 @@ export default function LandingPage() {
         ward: ward || undefined,
         landmark: landmark || undefined,
         citizen_name: citizenName || profile?.name || 'Citizen',
-        citizen_email: profile?.email || 'citizen@nexciv.org',
+        citizen_email: citizenEmail.trim() || profile?.email || 'pranaykoppineedi@gmail.com',
         citizen_phone: citizenPhone || profile?.phone || undefined,
         priority: priority || 'Medium',
         priority_score: priorityScore || 65,
@@ -1366,7 +1376,7 @@ export default function LandingPage() {
                   </div>
 
                   {/* Citizen Contact Details */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                         Your Full Name
@@ -1381,7 +1391,20 @@ export default function LandingPage() {
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Contact Mobile Number
+                        Official Email <span className="text-teal-600 font-normal">(Receipt)</span>
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="pranaykoppineedi@gmail.com"
+                        value={citizenEmail}
+                        onChange={(e) => setCitizenEmail(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Mobile Number
                       </label>
                       <input
                         type="tel"
