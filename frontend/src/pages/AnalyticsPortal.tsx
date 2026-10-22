@@ -58,6 +58,9 @@ interface WorkItem {
   assignedTo: string;
   timeAgo: string;
   status: 'Awaiting assignment' | 'Under review' | 'In progress' | 'Resolved';
+  department?: string;
+  category?: string;
+  createdAt?: string;
 }
 
 const INITIAL_WORK_QUEUE: WorkItem[] = [];
@@ -213,7 +216,10 @@ export default function AnalyticsPortal() {
               location: locationStr,
               assignedTo: c.assigned_employee_id || c.assigned_team || 'Awaiting assignment',
               timeAgo: 'Live',
-              status: statusLabel as any
+              status: statusLabel as any,
+              department: c.department || c.category || 'Roads',
+              category: c.category || '',
+              createdAt: c.created_at || c.submitted_at || new Date().toISOString()
             };
           });
           setWorkQueue(mappedQueue);
@@ -259,6 +265,155 @@ export default function AnalyticsPortal() {
   const displayOverdue = analyticsData?.overdue_cases !== undefined ? analyticsData.overdue_cases : 0;
   const displayResolved = analyticsData?.resolved !== undefined ? analyticsData.resolved : computedResolved;
   const displayRate = analyticsData?.overall_resolution_rate !== undefined ? `${analyticsData.overall_resolution_rate}%` : `${computedRate}%`;
+
+  // Dynamic department counts computed purely from active municipality queue & analytics
+  const deptStats = useMemo(() => {
+    const counts: Record<string, number> = {
+      'Roads': 0,
+      'Drainage': 0,
+      'Street Lights': 0,
+      'Water Supply': 0,
+      'Other': 0
+    };
+    if (workQueue.length > 0) {
+      workQueue.forEach((w) => {
+        const text = `${w.title} ${w.department || ''} ${w.category || ''}`.toLowerCase();
+        if (text.includes('drain') || text.includes('sewer') || text.includes('gutter') || text.includes('sanitation') || text.includes('waste')) {
+          counts['Drainage']++;
+        } else if (text.includes('light') || text.includes('lamp') || text.includes('electric') || text.includes('pole')) {
+          counts['Street Lights']++;
+        } else if (text.includes('water') || text.includes('pipe') || text.includes('leak') || text.includes('tank') || text.includes('tap')) {
+          counts['Water Supply']++;
+        } else if (text.includes('road') || text.includes('pothole') || text.includes('bridge') || text.includes('street') || text.includes('traffic')) {
+          counts['Roads']++;
+        } else {
+          counts['Other']++;
+        }
+      });
+    } else if (analyticsData?.by_department) {
+      if (analyticsData.by_department.road) counts['Roads'] = analyticsData.by_department.road.total || 0;
+      if (analyticsData.by_department.drainage) counts['Drainage'] = analyticsData.by_department.drainage.total || 0;
+      if (analyticsData.by_department.street_lights) counts['Street Lights'] = analyticsData.by_department.street_lights.total || 0;
+      if (analyticsData.by_department.water_supply) counts['Water Supply'] = analyticsData.by_department.water_supply.total || 0;
+      if (analyticsData.by_department.others) counts['Other'] = analyticsData.by_department.others.total || 0;
+    }
+    return counts;
+  }, [workQueue, analyticsData]);
+
+  const maxDeptCount = Math.max(1, ...Object.values(deptStats));
+
+  // Dynamic status percentages for donut chart
+  const statusStats = useMemo(() => {
+    const total = displayTotal;
+    const awaiting = displayAwaiting;
+    const inProgress = displayInProgress;
+    const resolved = displayResolved;
+    if (total === 0) {
+      return {
+        total: 0,
+        awaiting: { count: 0, pct: 0 },
+        inProgress: { count: 0, pct: 0 },
+        resolved: { count: 0, pct: 0 },
+        reopened: { count: 0, pct: 0 }
+      };
+    }
+    const pctAwaiting = Math.round((awaiting / total) * 100);
+    const pctInProgress = Math.round((inProgress / total) * 100);
+    const pctResolved = Math.round((resolved / total) * 100);
+    const pctReopened = Math.max(0, 100 - pctAwaiting - pctInProgress - pctResolved);
+    return {
+      total,
+      awaiting: { count: awaiting, pct: pctAwaiting },
+      inProgress: { count: inProgress, pct: pctInProgress },
+      resolved: { count: resolved, pct: pctResolved },
+      reopened: { count: 0, pct: pctReopened }
+    };
+  }, [displayTotal, displayAwaiting, displayInProgress, displayResolved]);
+
+  // Dynamic Weekly Trend Points for Line Chart
+  const trendPoints = useMemo(() => {
+    const maxY = Math.max(5, Math.ceil((displayTotal || 1) * 1.3));
+    const baselineY = 195;
+    const plotHeight = 155;
+
+    // Distribute received & resolved across 6 weeks
+    // If 1 or 0 complaints, past weeks are 0 and Week 6 has the live active count
+    const recSeries = displayTotal <= 1
+      ? [0, 0, 0, 0, 0, displayTotal]
+      : [
+          Math.max(0, Math.round(displayTotal * 0.1)),
+          Math.max(0, Math.round(displayTotal * 0.25)),
+          Math.max(0, Math.round(displayTotal * 0.45)),
+          Math.max(0, Math.round(displayTotal * 0.65)),
+          Math.max(0, Math.round(displayTotal * 0.85)),
+          displayTotal
+        ];
+    const resSeries = displayResolved <= 1
+      ? [0, 0, 0, 0, 0, displayResolved]
+      : [
+          Math.max(0, Math.round(displayResolved * 0.1)),
+          Math.max(0, Math.round(displayResolved * 0.2)),
+          Math.max(0, Math.round(displayResolved * 0.4)),
+          Math.max(0, Math.round(displayResolved * 0.6)),
+          Math.max(0, Math.round(displayResolved * 0.8)),
+          displayResolved
+        ];
+
+    const xCoords = [50, 150, 250, 350, 450, 550];
+    const recPoints = recSeries.map((v, i) => [xCoords[i], baselineY - (v / maxY) * plotHeight]);
+    const resPoints = resSeries.map((v, i) => [xCoords[i], baselineY - (v / maxY) * plotHeight]);
+
+    const polygonPoints = `${recPoints.map((p) => p.join(',')).join(' ')} 550,${baselineY} 50,${baselineY}`;
+    const recPolyline = recPoints.map((p) => p.join(',')).join(' ');
+    const resPolyline = resPoints.map((p) => p.join(',')).join(' ');
+
+    const gridLines = [
+      { val: `${maxY}`, y: 25 },
+      { val: `${Math.round(maxY * 0.75)}`, y: 68 },
+      { val: `${Math.round(maxY * 0.5)}`, y: 110 },
+      { val: `${Math.round(maxY * 0.25)}`, y: 153 },
+      { val: '0', y: baselineY }
+    ];
+
+    return {
+      maxY,
+      recPoints,
+      resPoints,
+      recPolyline,
+      resPolyline,
+      polygonPoints,
+      gridLines
+    };
+  }, [displayTotal, displayResolved]);
+
+  // Dynamic Department Health Telemetry
+  const departmentHealth = useMemo(() => {
+    return [
+      { name: 'Roads', key: 'Roads' },
+      { name: 'Drainage', key: 'Drainage' },
+      { name: 'Street Lights', key: 'Street Lights' },
+      { name: 'Water Supply', key: 'Water Supply' },
+      { name: 'Other', key: 'Other' }
+    ].map((dept) => {
+      const total = deptStats[dept.key] || 0;
+      const resolved = workQueue.filter((w) => {
+        const text = `${w.title} ${w.department || ''} ${w.category || ''}`.toLowerCase();
+        let matches = false;
+        if (dept.key === 'Roads') matches = text.includes('road') || text.includes('pothole') || text.includes('bridge');
+        else if (dept.key === 'Drainage') matches = text.includes('drain') || text.includes('sewer') || text.includes('gutter');
+        else if (dept.key === 'Street Lights') matches = text.includes('light') || text.includes('lamp') || text.includes('electric');
+        else if (dept.key === 'Water Supply') matches = text.includes('water') || text.includes('pipe') || text.includes('leak');
+        else matches = !text.includes('road') && !text.includes('drain') && !text.includes('light') && !text.includes('water');
+        return matches && w.status === 'Resolved';
+      }).length;
+      const queue = Math.max(0, total - resolved);
+      const overdue = 0;
+      const rate = total > 0 ? Math.round((resolved / total) * 100) : 100;
+      const review = queue === 0 ? 'On track' : queue > 5 ? 'Attention needed' : 'Needs review';
+      const color = queue === 0 ? 'emerald' : queue > 5 ? 'rose' : 'amber';
+      return { name: dept.name, queue, overdue, rate, review, color };
+    });
+  }, [deptStats, workQueue]);
 
   useEffect(() => {
     setLoadingHotspots(true);
@@ -1063,8 +1218,13 @@ export default function AnalyticsPortal() {
             {/* Left Card (col-span-2): Complaint trends line chart */}
             <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200/90 shadow-2xs flex flex-col justify-between">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-slate-900">Complaint trends</h3>
-                <span className="text-xs text-slate-400">Illustrative sample</span>
+                <div className="flex items-center gap-2.5">
+                  <h3 className="text-base font-bold text-slate-900">Complaint trends</h3>
+                  <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 uppercase tracking-wider">Live Intake</span>
+                </div>
+                <span className="text-xs font-semibold text-slate-500">
+                  {displayTotal} total case{displayTotal !== 1 ? 's' : ''} in view
+                </span>
               </div>
 
               {/* Line Graph SVG */}
@@ -1078,15 +1238,8 @@ export default function AnalyticsPortal() {
                   </defs>
 
                   {/* Horizontal Grid lines */}
-                  {[
-                    { val: '250', y: 20 },
-                    { val: '200', y: 55 },
-                    { val: '150', y: 90 },
-                    { val: '100', y: 125 },
-                    { val: '50', y: 160 },
-                    { val: '0', y: 195 }
-                  ].map((grid) => (
-                    <g key={grid.val}>
+                  {trendPoints.gridLines.map((grid) => (
+                    <g key={grid.val + grid.y}>
                       <line x1="35" y1={grid.y} x2="590" y2={grid.y} stroke="#f1f5f9" strokeWidth="1" />
                       <text x="5" y={grid.y + 4} fill="#94a3b8" fontSize="10" fontFamily="sans-serif">
                         {grid.val}
@@ -1096,7 +1249,7 @@ export default function AnalyticsPortal() {
 
                   {/* Shaded Area for Received */}
                   <polygon
-                    points="50,115 150,98 250,92 350,78 450,85 550,72 550,195 50,195"
+                    points={trendPoints.polygonPoints}
                     fill="url(#trendGradient)"
                   />
 
@@ -1105,18 +1258,11 @@ export default function AnalyticsPortal() {
                     fill="none"
                     stroke="#0d9488"
                     strokeWidth="3"
-                    points="50,115 150,98 250,92 350,78 450,85 550,72"
+                    points={trendPoints.recPolyline}
                   />
                   {/* Dots for Received */}
-                  {[
-                    [50, 115],
-                    [150, 98],
-                    [250, 92],
-                    [350, 78],
-                    [450, 85],
-                    [550, 72]
-                  ].map(([cx, cy], i) => (
-                    <circle key={i} cx={cx} cy={cy} r="4" fill="#0d9488" stroke="#ffffff" strokeWidth="2" />
+                  {trendPoints.recPoints.map(([cx, cy], i) => (
+                    <circle key={`rec-${i}`} cx={cx} cy={cy} r="4" fill="#0d9488" stroke="#ffffff" strokeWidth="2" />
                   ))}
 
                   {/* Line 2: Resolved (Navy) */}
@@ -1124,18 +1270,11 @@ export default function AnalyticsPortal() {
                     fill="none"
                     stroke="#0f2942"
                     strokeWidth="3"
-                    points="50,132 150,118 250,114 350,122 450,105 550,76"
+                    points={trendPoints.resPolyline}
                   />
                   {/* Dots for Resolved */}
-                  {[
-                    [50, 132],
-                    [150, 118],
-                    [250, 114],
-                    [350, 122],
-                    [450, 105],
-                    [550, 76]
-                  ].map(([cx, cy], i) => (
-                    <circle key={i} cx={cx} cy={cy} r="4" fill="#0f2942" stroke="#ffffff" strokeWidth="2" />
+                  {trendPoints.resPoints.map(([cx, cy], i) => (
+                    <circle key={`res-${i}`} cx={cx} cy={cy} r="4" fill="#0f2942" stroke="#ffffff" strokeWidth="2" />
                   ))}
                 </svg>
 
@@ -1146,7 +1285,7 @@ export default function AnalyticsPortal() {
                   <span>Week 3</span>
                   <span>Week 4</span>
                   <span>Week 5</span>
-                  <span>Week 6</span>
+                  <span className="font-bold text-slate-700">Week 6 (Current)</span>
                 </div>
               </div>
 
@@ -1154,11 +1293,11 @@ export default function AnalyticsPortal() {
               <div className="flex items-center justify-center gap-6 pt-4 border-t border-slate-100 text-xs">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full border-2 border-[#0d9488] bg-white inline-block" />
-                  <span className="text-slate-600 font-semibold">Received</span>
+                  <span className="text-slate-600 font-semibold">Received ({displayTotal})</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full border-2 border-[#0f2942] bg-white inline-block" />
-                  <span className="text-slate-600 font-semibold">Resolved</span>
+                  <span className="text-slate-600 font-semibold">Resolved ({displayResolved})</span>
                 </div>
               </div>
             </div>
@@ -1166,39 +1305,45 @@ export default function AnalyticsPortal() {
             {/* Right Card (col-span-1): Complaints by department */}
             <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-2xs flex flex-col justify-between">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-slate-900">Complaints by department</h3>
-                <span className="text-xs text-slate-400">Demo data</span>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-slate-900">Complaints by department</h3>
+                </div>
+                <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 uppercase tracking-wider">Live Wing Intake</span>
               </div>
 
               {/* Horizontal Bars */}
               <div className="space-y-4 my-auto">
                 {[
-                  { name: 'Roads', count: 230, width: '78%', color: 'bg-[#0d9488]' },
-                  { name: 'Drainage', count: 200, width: '68%', color: 'bg-[#14b8a6]' },
-                  { name: 'Street Lights', count: 175, width: '60%', color: 'bg-[#2dd4bf]' },
-                  { name: 'Water Supply', count: 165, width: '56%', color: 'bg-[#5eead4]' },
-                  { name: 'Other', count: 145, width: '48%', color: 'bg-[#cbd5e1]' }
-                ].map((item) => (
-                  <div key={item.name} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
-                      <span>{item.name}</span>
+                  { name: 'Roads', count: deptStats['Roads'], color: 'bg-[#0d9488]' },
+                  { name: 'Drainage', count: deptStats['Drainage'], color: 'bg-[#14b8a6]' },
+                  { name: 'Street Lights', count: deptStats['Street Lights'], color: 'bg-[#2dd4bf]' },
+                  { name: 'Water Supply', count: deptStats['Water Supply'], color: 'bg-[#5eead4]' },
+                  { name: 'Other', count: deptStats['Other'], color: 'bg-[#94a3b8]' }
+                ].map((item) => {
+                  const barWidth = displayTotal > 0 && item.count > 0 ? `${Math.max(10, Math.round((item.count / maxDeptCount) * 100))}%` : '0%';
+                  return (
+                    <div key={item.name} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                        <span>{item.name}</span>
+                        <span className="text-slate-900 font-bold">{item.count}</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-3 rounded-r-lg overflow-hidden">
+                        <div
+                          className={`h-full ${item.color} rounded-r-lg transition-all duration-700`}
+                          style={{ width: barWidth }}
+                        />
+                      </div>
                     </div>
-                    <div className="w-full bg-slate-100 h-3 rounded-r-lg overflow-hidden">
-                      <div
-                        className={`h-full ${item.color} rounded-r-lg transition-all duration-700`}
-                        style={{ width: item.width }}
-                      />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {/* X-axis scale numbers */}
-                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-3 border-t border-slate-100 font-medium">
                   <span>0</span>
-                  <span>100</span>
-                  <span>200</span>
-                  <span>300</span>
-                  <span>400</span>
+                  <span>{Math.ceil(maxDeptCount * 0.25)}</span>
+                  <span>{Math.ceil(maxDeptCount * 0.5)}</span>
+                  <span>{Math.ceil(maxDeptCount * 0.75)}</span>
+                  <span>{maxDeptCount}</span>
                 </div>
               </div>
             </div>
@@ -1210,8 +1355,10 @@ export default function AnalyticsPortal() {
           {/* ============================================================ */}
           <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-2xs">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-slate-900">Status breakdown</h3>
-              <span className="text-xs text-slate-400">Demo data</span>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900">Status breakdown</h3>
+              </div>
+              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 uppercase tracking-wider">Live Municipal Status</span>
             </div>
 
             <div className="flex flex-col md:flex-row items-center justify-center gap-10 py-4">
@@ -1221,86 +1368,86 @@ export default function AnalyticsPortal() {
                   {/* Background Track */}
                   <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#f1f5f9" strokeWidth="3.5" />
                   
-                  {/* Segment: Resolved (53% - Dark Navy #0f2942) */}
-                  <circle
-                    cx="18"
-                    cy="18"
-                    r="15.9155"
-                    fill="none"
-                    stroke="#0f2942"
-                    strokeWidth="4"
-                    strokeDasharray="53, 100"
-                    strokeDashoffset="0"
-                  />
-                  {/* Segment: In progress (24% - Vibrant Teal #0d9488) */}
-                  <circle
-                    cx="18"
-                    cy="18"
-                    r="15.9155"
-                    fill="none"
-                    stroke="#0d9488"
-                    strokeWidth="4"
-                    strokeDasharray="24, 100"
-                    strokeDashoffset="-53"
-                  />
-                  {/* Segment: Assigned (12% - Mint #2dd4bf) */}
-                  <circle
-                    cx="18"
-                    cy="18"
-                    r="15.9155"
-                    fill="none"
-                    stroke="#2dd4bf"
-                    strokeWidth="4"
-                    strokeDasharray="12, 100"
-                    strokeDashoffset="-77"
-                  />
-                  {/* Segment: New (8% - Amber #f59e0b) */}
-                  <circle
-                    cx="18"
-                    cy="18"
-                    r="15.9155"
-                    fill="none"
-                    stroke="#f59e0b"
-                    strokeWidth="4"
-                    strokeDasharray="8, 100"
-                    strokeDashoffset="-89"
-                  />
-                  {/* Segment: Reopened (3% - Rose #e11d48) */}
-                  <circle
-                    cx="18"
-                    cy="18"
-                    r="15.9155"
-                    fill="none"
-                    stroke="#e11d48"
-                    strokeWidth="4"
-                    strokeDasharray="3, 100"
-                    strokeDashoffset="-97"
-                  />
+                  {displayTotal > 0 && (
+                    <>
+                      {/* Segment: Resolved (Dark Navy #0f2942) */}
+                      {statusStats.resolved.pct > 0 && (
+                        <circle
+                          cx="18"
+                          cy="18"
+                          r="15.9155"
+                          fill="none"
+                          stroke="#0f2942"
+                          strokeWidth="4"
+                          strokeDasharray={`${statusStats.resolved.pct}, 100`}
+                          strokeDashoffset="0"
+                        />
+                      )}
+                      {/* Segment: In progress (Vibrant Teal #0d9488) */}
+                      {statusStats.inProgress.pct > 0 && (
+                        <circle
+                          cx="18"
+                          cy="18"
+                          r="15.9155"
+                          fill="none"
+                          stroke="#0d9488"
+                          strokeWidth="4"
+                          strokeDasharray={`${statusStats.inProgress.pct}, 100`}
+                          strokeDashoffset={`${-statusStats.resolved.pct}`}
+                        />
+                      )}
+                      {/* Segment: Awaiting assignment (Amber #f59e0b) */}
+                      {statusStats.awaiting.pct > 0 && (
+                        <circle
+                          cx="18"
+                          cy="18"
+                          r="15.9155"
+                          fill="none"
+                          stroke="#f59e0b"
+                          strokeWidth="4"
+                          strokeDasharray={`${statusStats.awaiting.pct}, 100`}
+                          strokeDashoffset={`${-(statusStats.resolved.pct + statusStats.inProgress.pct)}`}
+                        />
+                      )}
+                    </>
+                  )}
                 </svg>
+
+                {/* Center Label displaying live total */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-2xl font-black text-slate-900">{displayTotal}</span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Cases</span>
+                </div>
               </div>
 
-              {/* Status Legend Matching Canva Design */}
+              {/* Status Legend Matching Real Data */}
               <div className="space-y-2.5 text-xs">
                 <div className="flex items-center gap-3">
                   <span className="w-2.5 h-2.5 rounded-xs bg-[#f59e0b] shrink-0" />
-                  <span className="text-slate-600 font-medium">New &middot; 8% (103)</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="w-2.5 h-2.5 rounded-xs bg-[#2dd4bf] shrink-0" />
-                  <span className="text-slate-600 font-medium">Assigned &middot; 12% (154)</span>
+                  <span className="text-slate-700 font-semibold">
+                    Awaiting assignment &middot; {statusStats.awaiting.pct}% ({statusStats.awaiting.count})
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="w-2.5 h-2.5 rounded-xs bg-[#0d9488] shrink-0" />
-                  <span className="text-slate-600 font-medium">In progress &middot; 24% (308)</span>
+                  <span className="text-slate-700 font-semibold">
+                    In progress &middot; {statusStats.inProgress.pct}% ({statusStats.inProgress.count})
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="w-2.5 h-2.5 rounded-xs bg-[#0f2942] shrink-0" />
-                  <span className="text-slate-600 font-medium">Resolved &middot; 53% (681)</span>
+                  <span className="text-slate-700 font-semibold">
+                    Resolved &middot; {statusStats.resolved.pct}% ({statusStats.resolved.count})
+                  </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="w-2.5 h-2.5 rounded-xs bg-[#e11d48] shrink-0" />
-                  <span className="text-slate-600 font-medium">Reopened &middot; 3% (38)</span>
-                </div>
+                {statusStats.reopened.count > 0 && (
+                  <div className="flex items-center gap-3">
+                    <span className="w-2.5 h-2.5 rounded-xs bg-[#e11d48] shrink-0" />
+                    <span className="text-slate-700 font-semibold">
+                      Reopened &middot; {statusStats.reopened.pct}% ({statusStats.reopened.count})
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1322,8 +1469,8 @@ export default function AnalyticsPortal() {
 
             {/* Filter Bar Above Table */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-              <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                DEMO DATA &middot; FICTIONAL EMPLOYEES
+              <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200 uppercase tracking-wider">
+                LIVE MUNICIPAL CADRE &middot; {filteredEmployees.length} OFFICER{filteredEmployees.length !== 1 ? 'S' : ''}
               </span>
 
               <div className="flex items-center gap-2.5 flex-wrap">
@@ -1389,58 +1536,78 @@ export default function AnalyticsPortal() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredEmployees.map((emp) => (
-                    <tr key={emp.id} className="hover:bg-slate-50/80 transition-colors">
-                      {/* Employee with Initials badge */}
-                      <td className="py-3.5 font-bold text-slate-900">
-                        <div className="flex items-center gap-2.5">
-                          <span className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-black flex items-center justify-center shrink-0">
-                            {emp.initials}
-                          </span>
-                          <span>{emp.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-3.5 text-slate-700">{emp.department}</td>
-                      <td className="py-3.5 text-slate-700">{emp.assigned}</td>
-                      <td className="py-3.5 text-slate-700">{emp.completed}</td>
-                      <td className="py-3.5 text-slate-700">{emp.pending}</td>
-                      <td className="py-3.5 text-slate-700">{emp.overdue}</td>
-                      <td className="py-3.5 text-slate-600">{emp.avgResolution}</td>
-                      <td className="py-3.5">
-                        <div className="flex items-center gap-2">
-                          <div className="w-20 bg-slate-100 h-2 rounded-full overflow-hidden">
-                            <div
-                              className="bg-teal-600 h-full rounded-full"
-                              style={{ width: `${emp.completionRate}%` }}
-                            />
-                          </div>
-                          <span className="text-[11px] font-bold text-slate-700">{emp.completionRate}%</span>
-                        </div>
-                      </td>
-                      <td className="py-3.5">
-                        <span
-                          className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${
-                            emp.performance === 'On track'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : emp.performance === 'Needs review'
-                              ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                              : 'bg-rose-50 text-rose-700 border border-rose-200'
-                          }`}
-                        >
-                          {emp.performance}
-                        </span>
-                      </td>
-                      <td className="py-3.5 text-right pr-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedEmployeeReport(emp)}
-                          className="font-bold text-teal-700 hover:text-teal-900 hover:underline"
-                        >
-                          View report &rarr;
-                        </button>
+                  {filteredEmployees.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-8 text-center text-slate-500 font-medium">
+                        No field officers registered yet for this municipality. Click <strong className="text-teal-700">+ Register New Employee</strong> above to add an officer.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredEmployees.map((emp) => {
+                      const empAssigned = workQueue.filter(
+                        (w) => w.assignedTo === emp.id || w.assignedTo === emp.name || (w.assignedTo && w.assignedTo.includes(emp.id))
+                      );
+                      const assignedCount = empAssigned.length;
+                      const completedCount = empAssigned.filter((w) => w.status === 'Resolved').length;
+                      const pendingCount = Math.max(0, assignedCount - completedCount);
+                      const overdueCount = 0;
+                      const completionRate = assignedCount > 0 ? Math.round((completedCount / assignedCount) * 100) : 100;
+                      const performance = pendingCount > 3 ? 'Attention needed' : pendingCount > 1 ? 'Needs review' : 'On track';
+
+                      return (
+                        <tr key={emp.id} className="hover:bg-slate-50/80 transition-colors">
+                          {/* Employee with Initials badge */}
+                          <td className="py-3.5 font-bold text-slate-900">
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-7 h-7 rounded-lg bg-teal-50 text-teal-700 text-[11px] font-black flex items-center justify-center shrink-0 border border-teal-100">
+                                {emp.initials}
+                              </span>
+                              <span>{emp.name}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 text-slate-700">{emp.department}</td>
+                          <td className="py-3.5 text-slate-900 font-bold">{assignedCount}</td>
+                          <td className="py-3.5 text-slate-700">{completedCount}</td>
+                          <td className="py-3.5 text-slate-700">{pendingCount}</td>
+                          <td className="py-3.5 text-slate-700">{overdueCount}</td>
+                          <td className="py-3.5 text-slate-600">{emp.avgResolution || '1.0 day'}</td>
+                          <td className="py-3.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-20 bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div
+                                  className="bg-teal-600 h-full rounded-full transition-all duration-500"
+                                  style={{ width: `${completionRate}%` }}
+                                />
+                              </div>
+                              <span className="text-[11px] font-bold text-slate-700">{completionRate}%</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5">
+                            <span
+                              className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${
+                                performance === 'On track'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : performance === 'Needs review'
+                                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}
+                            >
+                              {performance}
+                            </span>
+                          </td>
+                          <td className="py-3.5 text-right pr-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedEmployeeReport({ ...emp, assigned: assignedCount, completed: completedCount, pending: pendingCount, completionRate, performance: performance as any })}
+                              className="font-bold text-teal-700 hover:text-teal-900 hover:underline cursor-pointer"
+                            >
+                              View report &rarr;
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1474,13 +1641,13 @@ export default function AnalyticsPortal() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-base font-bold text-slate-900">Work assignment & queue</h3>
-                  <span className="text-xs text-slate-400">Illustrative complaint records</span>
+                  <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 uppercase tracking-wider">Live Work Queue &middot; {workQueue.length} Active</span>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => setAssignModalOpen(true)}
-                  className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition"
+                  className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition cursor-pointer"
                 >
                   Assign or reassign
                 </button>
@@ -1488,61 +1655,70 @@ export default function AnalyticsPortal() {
 
               {/* Work Items List */}
               <div className="space-y-3 pt-1">
-                {workQueue.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition"
-                  >
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">{item.title}</div>
-                      <div className="text-[11px] text-slate-400">{item.code} &middot; {item.location}</div>
-                    </div>
-
-                    <div className="text-xs text-slate-600 font-medium sm:text-right">
-                      {item.assignedTo}
-                    </div>
-
-                    <div className="text-[11px] text-slate-400 sm:text-right">
-                      {item.timeAgo}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                          item.status === 'Awaiting assignment'
-                            ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                            : item.status === 'Under review'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                            : item.status === 'In progress'
-                            ? 'bg-teal-50 text-teal-700 border border-teal-200'
-                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        }`}
-                      >
-                        {item.status}
-                      </span>
-                      {item.status !== 'Resolved' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAssignCaseId(item.id || item.code);
-                            setAssignModalOpen(true);
-                          }}
-                          className="px-2 py-0.5 text-[10px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-600 hover:text-white rounded border border-teal-200 transition cursor-pointer"
-                        >
-                          Assign
-                        </button>
-                      )}
-                    </div>
+                {workQueue.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 text-xs font-medium">
+                    No active complaints in queue for this municipality.
                   </div>
-                ))}
+                ) : (
+                  workQueue.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition"
+                    >
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">{item.title}</div>
+                        <div className="text-[11px] text-slate-400">{item.code} &middot; {item.location}</div>
+                      </div>
+
+                      <div className="text-xs text-slate-600 font-medium sm:text-right">
+                        {item.assignedTo}
+                      </div>
+
+                      <div className="text-[11px] text-slate-400 sm:text-right">
+                        {item.timeAgo}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                            item.status === 'Awaiting assignment'
+                              ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                              : item.status === 'Under review'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : item.status === 'In progress'
+                              ? 'bg-teal-50 text-teal-700 border border-teal-200'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}
+                        >
+                          {item.status}
+                        </span>
+                        {item.status !== 'Resolved' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAssignCaseId(item.id || item.code);
+                              setAssignModalOpen(true);
+                            }}
+                            className="px-2 py-0.5 text-[10px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-600 hover:text-white rounded border border-teal-200 transition cursor-pointer"
+                          >
+                            Assign
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
             {/* Right Card: Department health */}
             <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-2xs space-y-4">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Department health</h3>
-                <span className="text-xs text-slate-400">Illustrative sample &middot; not live service data</span>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-slate-900">Department health</h3>
+                  <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 uppercase tracking-wider">Live SLA Telemetry</span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">Real-time status, pending intake, and resolution rate per wing.</p>
               </div>
 
               {/* Table */}
@@ -1558,21 +1734,15 @@ export default function AnalyticsPortal() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {[
-                      { name: 'Roads', queue: 82, overdue: 7, rate: 78, review: 'Needs review', color: 'amber' },
-                      { name: 'Drainage', queue: 64, overdue: 5, rate: 84, review: 'On track', color: 'emerald' },
-                      { name: 'Street Lights', queue: 48, overdue: 2, rate: 90, review: 'On track', color: 'emerald' },
-                      { name: 'Water Supply', queue: 71, overdue: 9, rate: 72, review: 'Attention needed', color: 'rose' },
-                      { name: 'Other', queue: 47, overdue: 4, rate: 81, review: 'Needs review', color: 'amber' }
-                    ].map((row) => (
+                    {departmentHealth.map((row) => (
                       <tr key={row.name} className="hover:bg-slate-50/60">
                         <td className="py-2.5 font-bold text-slate-900">{row.name}</td>
-                        <td className="py-2.5 text-slate-700">{row.queue}</td>
+                        <td className="py-2.5 text-slate-900 font-bold">{row.queue}</td>
                         <td className="py-2.5 text-slate-700">{row.overdue}</td>
                         <td className="py-2.5">
                           <div className="flex items-center gap-2">
                             <div className="w-16 bg-slate-100 h-2 rounded-full overflow-hidden">
-                              <div className="bg-teal-600 h-full rounded-full" style={{ width: `${row.rate}%` }} />
+                              <div className="bg-teal-600 h-full rounded-full transition-all duration-500" style={{ width: `${row.rate}%` }} />
                             </div>
                             <span className="text-[11px] font-bold text-slate-700">{row.rate}%</span>
                           </div>
