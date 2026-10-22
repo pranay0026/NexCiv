@@ -1,0 +1,1482 @@
+import { useState, useMemo, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { Link, useNavigate } from 'react-router-dom';
+import { api, EmployeeRecord } from '../lib/api';
+import {
+  LayoutGrid,
+  FileText,
+  Layers,
+  Map,
+  TrendingUp,
+  Users,
+  Settings,
+  HelpCircle,
+  LogOut,
+  Search,
+  Bell,
+  Download,
+  Inbox,
+  Scan,
+  RotateCw,
+  CheckCircle2,
+  X,
+  Flame,
+  MapPin,
+  Clock,
+  Check,
+  RefreshCw
+} from 'lucide-react';
+
+interface ComplaintItem {
+  id: string;
+  rawId?: string;
+  title?: string;
+  category: string;
+  location: string;
+  landmark?: string;
+  ward?: string;
+  received: string;
+  status: 'New' | 'Under review' | 'In progress' | 'Resolved';
+  assignedTeam: string;
+  assignedEmployeeId?: string;
+  priority?: string;
+  priorityScore?: number;
+  upvotes?: number;
+  isDuplicate?: boolean;
+  defectType?: string;
+  visualScore?: number;
+  sla?: string;
+  resolutionNotes?: string;
+  resolutionProofUrl?: string;
+  locationLat?: number;
+  locationLng?: number;
+  description?: string;
+}
+
+const INITIAL_COMPLAINTS: ComplaintItem[] = [
+  {
+    id: 'NXC-1042',
+    rawId: 'a1111111-1111-1111-1111-111111111111',
+    title: 'Massive road cave-in and sinkhole near Benz Circle Flyover',
+    category: 'Roads',
+    location: 'NH-16 Benz Circle Flyover, Vijayawada',
+    landmark: 'Near Benz Circle Flyover Pillar 14',
+    ward: 'Ward 24',
+    received: '10:42 AM',
+    status: 'In progress',
+    assignedTeam: 'Roads & Buildings Rapid Response Team',
+    assignedEmployeeId: 'EMP-101',
+    priority: 'Critical',
+    priorityScore: 98.5,
+    defectType: 'pothole_crater',
+    sla: '0 - 4 Hours (Emergency Dispatch)',
+    locationLat: 16.4990,
+    locationLng: 80.6540,
+    description: 'Deep dangerous trench and sinkhole formed on the main NH-16 highway approach slab after heavy downpour.'
+  },
+  {
+    id: 'NXC-1041',
+    rawId: 'd4444444-4444-4444-4444-444444444444',
+    title: 'Toxic sewage overflow from blocked storm water nala',
+    category: 'Drainage',
+    location: 'Brodipet 4th Line, Guntur',
+    landmark: 'Opposite Municipal Community Hall',
+    ward: 'Ward 12',
+    received: '10:18 AM',
+    status: 'In progress',
+    assignedTeam: 'Drainage & Sewerage Jetting Crew',
+    assignedEmployeeId: 'EMP-109',
+    priority: 'High',
+    priorityScore: 82.0,
+    defectType: 'manhole_overflow',
+    sla: '24 Hours (Next Shift Field Team)',
+    locationLat: 16.3010,
+    locationLng: 80.4410,
+    description: 'Main municipal canal choked with plastic waste, black sewage backflow submerging residential street.'
+  },
+  {
+    id: 'NXC-1040',
+    rawId: 'c3333333-3333-3333-3333-333333333333',
+    title: 'High tension cable sparking near bus terminal entrance',
+    category: 'Street Lights',
+    location: 'Pandit Nehru Bus Station (PNBS), Vijayawada',
+    landmark: 'RTC Bus Stand Entrance Gate 3',
+    ward: 'Ward 8',
+    received: '09:56 AM',
+    status: 'New',
+    assignedTeam: 'APEPDCL Lineman Quick Response Team',
+    assignedEmployeeId: 'EMP-125',
+    priority: 'Critical',
+    priorityScore: 99.8,
+    defectType: 'night_hazard_blackout',
+    sla: '0 - 4 Hours (Emergency Dispatch)',
+    locationLat: 16.5080,
+    locationLng: 80.6210,
+    description: 'High voltage electrical transmission line snapped from concrete pole and sparking in water puddle.'
+  },
+  {
+    id: 'NXC-1039',
+    rawId: 'b2222222-2222-2222-2222-222222222222',
+    title: 'Drinking water pipeline burst and yellow contaminated supply near KGH Casualty',
+    category: 'Water Supply',
+    location: 'King George Hospital (KGH) Casualty Gate, Visakhapatnam',
+    landmark: 'Near KGH Casualty Ward Entrance',
+    ward: 'Ward 14',
+    received: '09:21 AM',
+    status: 'Resolved',
+    assignedTeam: 'Water Works Emergency Repair Squad',
+    assignedEmployeeId: 'EMP-117',
+    priority: 'Critical',
+    priorityScore: 99.2,
+    defectType: 'pipeline_burst',
+    sla: '0 - 4 Hours (Emergency Dispatch)',
+    locationLat: 17.7102,
+    locationLng: 83.3050,
+    description: 'Main drinking water pipeline burst open outside hospital gate. Replacement gasket installed and leak sealed.'
+  }
+];
+
+export default function EmployeeWorkspace() {
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
+  const currentEmpCode = profile?.employeeCode || 'EMP-101';
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
+  
+  // Navigation tabs (7 Interactive Views)
+  const [activeTab, setActiveTab] = useState('Overview');
+
+  // Search & Task Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showOnlyMyTasks, setShowOnlyMyTasks] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<'All' | 'New' | 'In progress' | 'Resolved'>('All');
+
+  // Complaints & Hotspots State
+  const [complaints, setComplaints] = useState<ComplaintItem[]>(INITIAL_COMPLAINTS);
+  const [hotspots, setHotspots] = useState<any[]>([]);
+  const [employeeStats, setEmployeeStats] = useState<any>(null);
+  const [colleaguesList, setColleaguesList] = useState<EmployeeRecord[]>([]);
+  const [colleagueSearch, setColleagueSearch] = useState('');
+  const [selectedPinComplaint, setSelectedPinComplaint] = useState<ComplaintItem | null>(null);
+
+  // Resolution Modal State
+  const [editingComplaint, setEditingComplaint] = useState<ComplaintItem | null>(null);
+  const [editStatus, setEditStatus] = useState<ComplaintItem['status']>('In progress');
+  const [editTeam, setEditTeam] = useState('');
+  const [resolutionNotes, setResolutionNotes] = useState('');
+  const [resolutionProof, setResolutionProof] = useState<string | null>(null);
+  const [savingResolution, setSavingResolution] = useState(false);
+
+  // Settings state
+  const [alertSms, setAlertSms] = useState(true);
+  const [alertEmail, setAlertEmail] = useState(true);
+  const [soundAlert, setSoundAlert] = useState(true);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+
+  // Fetch live workspace data from backend
+  const fetchLiveWorkspaceData = async () => {
+    try {
+      const [liveData, hotspotData, empData, empsList] = await Promise.all([
+        api.getComplaints().catch(() => []),
+        api.getHotspots(100).catch(() => ({ total_hotspots: 0, hotspots: [] })),
+        api.getEmployee(currentEmpCode).catch(() => null),
+        api.getEmployees().catch(() => [])
+      ]);
+
+      if (empData) {
+        setEmployeeStats(empData);
+      }
+
+      if (empsList && empsList.length > 0) {
+        setColleaguesList(empsList);
+      }
+
+      if (liveData && liveData.length > 0) {
+        const mapped: ComplaintItem[] = liveData.map((item: any) => {
+          const shortCode = item.id.length > 8 ? `NXC-${item.id.slice(0, 6).toUpperCase()}` : item.id;
+          const statusLabel = item.status === 'pending' ? 'New' : item.status === 'in_progress' ? 'In progress' : 'Resolved';
+          return {
+            id: shortCode,
+            rawId: item.id,
+            title: item.title,
+            category: (item.category || 'Roads').replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+            location: item.location_address || 'Coordinates provided',
+            landmark: item.landmark,
+            ward: item.ward,
+            received: 'Today',
+            status: statusLabel as any,
+            assignedTeam: item.assigned_team || `${item.department || 'Municipal'} Response Team`,
+            assignedEmployeeId: item.assigned_employee_id,
+            priority: item.priority || 'Medium',
+            priorityScore: item.priority_score,
+            upvotes: item.upvote_count || 1,
+            isDuplicate: item.is_duplicate,
+            defectType: item.defect_type,
+            visualScore: item.visual_score,
+            sla: item.municipal_sla,
+            resolutionNotes: item.resolution_notes,
+            resolutionProofUrl: item.resolution_proof_url,
+            locationLat: item.location_lat,
+            locationLng: item.location_lng,
+            description: item.description
+          };
+        });
+        setComplaints(mapped);
+      }
+
+      if (hotspotData && hotspotData.hotspots) {
+        setHotspots(hotspotData.hotspots);
+      }
+    } catch (err) {
+      console.warn('Could not load live backend data in employee workspace:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchLiveWorkspaceData();
+    const interval = setInterval(fetchLiveWorkspaceData, 8000);
+    return () => clearInterval(interval);
+  }, [currentEmpCode]);
+
+  // Complaints assigned strictly to this employee
+  const myAssignedComplaints = useMemo(() => {
+    return complaints.filter((c) => c.assignedEmployeeId === currentEmpCode);
+  }, [complaints, currentEmpCode]);
+
+  // Filtered complaints for the active view
+  const filteredComplaints = useMemo(() => {
+    let list = showOnlyMyTasks ? myAssignedComplaints : complaints;
+
+    if (statusFilter !== 'All') {
+      list = list.filter((c) => c.status === statusFilter);
+    }
+
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter(
+      (c) =>
+        c.id.toLowerCase().includes(q) ||
+        (c.title && c.title.toLowerCase().includes(q)) ||
+        c.category.toLowerCase().includes(q) ||
+        c.location.toLowerCase().includes(q) ||
+        c.assignedTeam.toLowerCase().includes(q) ||
+        c.status.toLowerCase().includes(q)
+    );
+  }, [complaints, myAssignedComplaints, showOnlyMyTasks, statusFilter, searchQuery]);
+
+  // Department unassigned queue (items awaiting staff pickup)
+  const departmentQueue = useMemo(() => {
+    return complaints.filter((c) => c.status !== 'Resolved');
+  }, [complaints]);
+
+  // Self-assign / Pick up an unassigned complaint
+  const handleSelfAssign = async (complaint: ComplaintItem) => {
+    if (!complaint.rawId && !complaint.id) return;
+    const targetId = complaint.rawId || complaint.id;
+    try {
+      await api.assignComplaint(targetId, currentEmpCode, profile?.departmentName || 'Field Operations');
+      // Update local state immediately
+      setComplaints((prev) =>
+        prev.map((c) =>
+          c.id === complaint.id || c.rawId === complaint.rawId
+            ? {
+                ...c,
+                assignedEmployeeId: currentEmpCode,
+                assignedTeam: `${profile?.name || 'Assigned Officer'} (${currentEmpCode})`,
+                status: 'In progress'
+              }
+            : c
+        )
+      );
+      // Refresh stats
+      fetchLiveWorkspaceData();
+    } catch (err) {
+      console.warn('Self-assignment note:', err);
+    }
+  };
+
+  // Status badge styling
+  const getStatusBadge = (status: ComplaintItem['status']) => {
+    switch (status) {
+      case 'New':
+        return 'bg-blue-50 text-blue-700 border border-blue-200';
+      case 'Under review':
+        return 'bg-amber-50 text-amber-800 border border-amber-200';
+      case 'In progress':
+        return 'bg-teal-50 text-teal-700 border border-teal-200';
+      case 'Resolved':
+        return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+      default:
+        return 'bg-slate-50 text-slate-700 border border-slate-200';
+    }
+  };
+
+  // Save Resolution & Proof
+  const handleSaveEdit = async () => {
+    if (!editingComplaint) return;
+    const targetStatus = editStatus === 'Resolved' ? 'resolved' : editStatus === 'In progress' ? 'in_progress' : 'pending';
+
+    setSavingResolution(true);
+    const targetId = editingComplaint.rawId || editingComplaint.id;
+    try {
+      await api.updateComplaintStatus(
+        targetId,
+        targetStatus,
+        resolutionNotes || undefined,
+        resolutionProof || undefined,
+        currentEmpCode
+      );
+    } catch (err) {
+      console.warn('Status update backend note:', err);
+    }
+
+    setComplaints((prev) =>
+      prev.map((c) =>
+        c.id === editingComplaint.id || c.rawId === editingComplaint.rawId
+          ? {
+              ...c,
+              status: editStatus,
+              assignedTeam: editTeam || c.assignedTeam,
+              resolutionNotes: resolutionNotes || c.resolutionNotes,
+              resolutionProofUrl: resolutionProof || c.resolutionProofUrl
+            }
+          : c
+      )
+    );
+
+    // Refresh live stats
+    fetchLiveWorkspaceData();
+    setSavingResolution(false);
+    setEditingComplaint(null);
+  };
+
+  const handleExportReport = () => {
+    const listToExport = showOnlyMyTasks ? myAssignedComplaints : complaints;
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      ['Complaint ID,Title,Category,Location,Status,Priority,Assigned Employee']
+        .concat(
+          listToExport.map(
+            (c) =>
+              `"${c.id}","${(c.title || '').replace(/"/g, '""')}","${c.category}","${c.location}","${c.status}","${c.priority || 'Medium'}","${c.assignedEmployeeId || 'Unassigned'}"`
+          )
+        )
+        .join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `NEXCIV_${currentEmpCode}_WorkReport_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Dynamic counts for this logged in employee
+  const totalMyTasks = myAssignedComplaints.length;
+  const pendingMyTasks = myAssignedComplaints.filter((c) => c.status !== 'Resolved').length;
+  const inProgressMyTasks = myAssignedComplaints.filter((c) => c.status === 'In progress').length;
+  const resolvedMyTasks = myAssignedComplaints.filter((c) => c.status === 'Resolved').length;
+  const resolutionRate = totalMyTasks > 0 ? Math.round((resolvedMyTasks / totalMyTasks) * 100) : 85;
+
+  return (
+    <div className="min-h-screen bg-black text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
+      {/* 1. TOP NAVBAR */}
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 text-slate-800 px-6 h-16 flex items-center justify-between shadow-2xs">
+        {/* Brand & Workspace title */}
+        <div className="flex items-center gap-3">
+          <Link to="/" className="text-xl font-black tracking-tight text-slate-900">
+            NEXCIV
+          </Link>
+          <span className="text-slate-300 font-light">|</span>
+          <span className="text-xs font-bold tracking-widest text-slate-500 uppercase">
+            STAFF WORKSPACE
+          </span>
+        </div>
+
+        {/* Right tools: Search, Notifications, User Badge */}
+        <div className="flex items-center gap-4">
+          {/* Search box */}
+          <div className="relative hidden md:block">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search assigned cases or ID"
+              className="w-64 lg:w-72 pl-9 pr-3.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition"
+            />
+          </div>
+
+          {/* Notification Bell */}
+          <button
+            type="button"
+            className="relative p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
+            title="Notifications"
+          >
+            <Bell size={18} />
+            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-teal-500 ring-2 ring-white"></span>
+          </button>
+
+          {/* User Initials Avatar */}
+          <div className="w-8 h-8 rounded-full bg-teal-50 border border-teal-200 text-teal-800 font-bold text-xs flex items-center justify-center select-none shadow-2xs">
+            {profile?.name ? profile.name.slice(0, 2).toUpperCase() : 'EM'}
+          </div>
+
+          {/* Employee Role Pill */}
+          <span className="text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full">
+            {currentEmpCode} &middot; Field Cadre
+          </span>
+
+          {/* Explicit Sign Out Button */}
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 transition text-xs font-bold shadow-2xs cursor-pointer group"
+            title="Log out from employee workspace"
+          >
+            <LogOut size={13} className="text-rose-600 group-hover:text-white transition" />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </header>
+
+      {/* 2. BODY: LEFT SIDEBAR + DARK CANVAS WITH FLOATING WHITE CARDS */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar */}
+        <aside className="w-56 bg-white border-r border-slate-200 text-slate-700 flex flex-col justify-between shrink-0 p-4">
+          {/* Main Navigation links */}
+          <nav className="space-y-1">
+            {[
+              { name: 'Overview', icon: LayoutGrid },
+              { name: 'Complaints', icon: FileText },
+              { name: 'Department Queue', icon: Layers },
+              { name: 'Map View', icon: Map },
+              { name: 'Reports & Analytics', icon: TrendingUp },
+              { name: 'Team Management', icon: Users },
+              { name: 'Settings', icon: Settings }
+            ].map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.name;
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => setActiveTab(item.name)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                    isActive
+                      ? 'bg-teal-50 text-teal-800 shadow-2xs'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <Icon size={16} className={isActive ? 'text-teal-700' : 'text-slate-500'} />
+                  <span>{item.name}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Bottom Sidebar items */}
+          <div className="pt-4 border-t border-slate-100 space-y-1">
+            <div className="px-3 py-1 text-[11px] font-bold text-slate-400">AP Municipal Admin</div>
+            <button
+              onClick={() => alert(`NEXCIV Municipal Staff Support\nCadre ID: ${currentEmpCode}\nSupport Helpline: Ext 402 / helpdesk@nexciv.gov`)}
+              className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition text-left cursor-pointer"
+            >
+              <HelpCircle size={16} className="text-slate-400" />
+              <span>Help center</span>
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition text-left cursor-pointer"
+            >
+              <LogOut size={16} className="text-rose-500" />
+              <span>Sign out</span>
+            </button>
+          </div>
+        </aside>
+
+        {/* Main Content Area */}
+        <main className="flex-1 bg-black overflow-y-auto p-6 lg:p-8 space-y-6">
+          <div className="max-w-7xl mx-auto space-y-6">
+            
+            {/* Header row */}
+            <div className="space-y-2">
+              <div className="text-xs text-slate-400 font-medium">
+                Andhra Pradesh Municipal Cadre Portal / {profile?.departmentName || 'Municipal Engineering'} / <span className="text-teal-400 font-bold">{activeTab}</span>
+              </div>
+              
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h1 className="text-2xl lg:text-3xl font-black text-white tracking-tight">
+                      {profile?.name || employeeStats?.name || 'A. Ramesh Kumar'}
+                    </h1>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      {currentEmpCode}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30">
+                      {profile?.designation || employeeStats?.designation || 'Field Executive Engineer'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Manage your assigned civic work orders, upload completion proof photos, and record field resolutions.
+                  </p>
+                </div>
+
+                {/* Quick actions */}
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <button
+                    onClick={handleExportReport}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200 transition shadow-2xs cursor-pointer"
+                  >
+                    <Download size={14} />
+                    <span>Export report</span>
+                  </button>
+
+                  <button
+                    onClick={fetchLiveWorkspaceData}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold border border-slate-700 transition cursor-pointer"
+                    title="Refresh live data"
+                  >
+                    <RefreshCw size={13} />
+                    <span>Sync</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* ============================================================ */}
+            {/* VIEW 1: OVERVIEW TAB                                         */}
+            {/* ============================================================ */}
+            {activeTab === 'Overview' && (
+              <div className="space-y-6">
+                {/* 4 KEY METRIC CARDS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Card 1: Assigned Work Orders */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs text-slate-800 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-600">Assigned Tasks ({currentEmpCode})</span>
+                      <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+                        <Inbox size={16} />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <div className="text-3xl font-black text-slate-900 tracking-tight">
+                        {employeeStats?.assigned_count ?? totalMyTasks}
+                      </div>
+                      <div className="text-[11px] text-teal-700 font-bold mt-0.5">Cadre work orders</div>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Pending Work Orders */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs text-slate-800 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-600">Pending Resolution</span>
+                      <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                        <Scan size={16} />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <div className="text-3xl font-black text-amber-600 tracking-tight">
+                        {employeeStats?.pending_count ?? pendingMyTasks}
+                      </div>
+                      <div className="text-[11px] text-amber-700 font-bold mt-0.5">Awaiting repair proof</div>
+                    </div>
+                  </div>
+
+                  {/* Card 3: In progress */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs text-slate-800 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-600">In Progress (Field Work)</span>
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                        <RotateCw size={16} />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <div className="text-3xl font-black text-blue-700 tracking-tight">
+                        {inProgressMyTasks}
+                      </div>
+                      <div className="text-[11px] text-blue-600 font-bold mt-0.5">Active field crews</div>
+                    </div>
+                  </div>
+
+                  {/* Card 4: Resolved with Proof */}
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs text-slate-800 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-600">Resolved & Verified</span>
+                      <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                        <CheckCircle2 size={16} />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <div className="text-3xl font-black text-emerald-600 tracking-tight">
+                        {employeeStats?.completed_count ?? resolvedMyTasks}
+                      </div>
+                      <div className="text-[11px] text-emerald-700 font-bold mt-0.5">
+                        {employeeStats?.completion_rate ? Math.round(employeeStats.completion_rate) : resolutionRate}% Resolution Rate
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* OVERVIEW WORK ORDER QUEUE TABLE */}
+                <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-2xs text-slate-800 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">Assigned Work Queue</h3>
+                      <p className="text-xs text-slate-500">Cases specifically assigned to your employee ID for field action.</p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowOnlyMyTasks(true)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          showOnlyMyTasks ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 bg-slate-100'
+                        }`}
+                      >
+                        My Cases ({myAssignedComplaints.length})
+                      </button>
+                      <button
+                        onClick={() => setShowOnlyMyTasks(false)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          !showOnlyMyTasks ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 bg-slate-100'
+                        }`}
+                      >
+                        All Division ({complaints.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-500 font-semibold">
+                          <th className="pb-3">Case ID</th>
+                          <th className="pb-3">Category</th>
+                          <th className="pb-3">Priority</th>
+                          <th className="pb-3">Location & Landmark</th>
+                          <th className="pb-3">Status</th>
+                          <th className="pb-3">Assigned Staff</th>
+                          <th className="pb-3 text-right pr-2">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredComplaints.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center text-slate-400">
+                              <p className="font-bold text-slate-700">No work orders currently assigned</p>
+                              <p className="text-[11px] text-slate-400 mt-0.5">Switch to "Department Queue" tab to pick up unassigned civic complaints.</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredComplaints.slice(0, 6).map((item) => (
+                            <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                              <td className="py-3.5 font-bold text-slate-900">{item.id}</td>
+                              <td className="py-3.5 text-slate-700">{item.category}</td>
+                              <td className="py-3.5">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    item.priority?.toLowerCase() === 'critical'
+                                      ? 'bg-red-100 text-red-800 border border-red-200'
+                                      : item.priority?.toLowerCase() === 'high'
+                                      ? 'bg-orange-100 text-orange-800 border border-orange-200'
+                                      : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  }`}
+                                >
+                                  {item.priority?.toLowerCase() === 'critical' && <Flame size={10} />}
+                                  {item.priority || 'Medium'} {item.priorityScore ? `(${Math.round(item.priorityScore)})` : ''}
+                                </span>
+                              </td>
+                              <td className="py-3.5 text-slate-600 max-w-[200px] truncate">
+                                {item.location} {item.landmark ? `(${item.landmark})` : ''}
+                              </td>
+                              <td className="py-3.5">
+                                <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${getStatusBadge(item.status)}`}>
+                                  {item.status}
+                                </span>
+                              </td>
+                              <td className="py-3.5 text-slate-700 font-medium">
+                                {item.assignedEmployeeId === currentEmpCode ? (
+                                  <span className="text-teal-700 font-bold">You ({currentEmpCode})</span>
+                                ) : (
+                                  item.assignedEmployeeId || 'Unassigned'
+                                )}
+                              </td>
+                              <td className="py-3.5 text-right pr-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingComplaint(item);
+                                    setEditStatus(item.status === 'Resolved' ? 'Resolved' : 'In progress');
+                                    setEditTeam(item.assignedTeam);
+                                    setResolutionNotes(item.resolutionNotes || '');
+                                    setResolutionProof(item.resolutionProofUrl || null);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-teal-50 hover:bg-teal-600 text-teal-700 hover:text-white rounded-lg font-bold text-xs transition border border-teal-200 cursor-pointer"
+                                >
+                                  <CheckCircle2 size={12} />
+                                  <span>Update & Proof</span>
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* REGIONAL HOTSPOTS WORK ORDERS SECTION */}
+                {hotspots.length > 0 && (
+                  <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-2xs text-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
+                          <Layers size={16} />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900">Incident Hotspots & Consolidated Work Orders</h3>
+                          <p className="text-[11px] text-slate-500">
+                            Phase 2 AI merges duplicate nearby reports into single dispatch work orders.
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200">
+                        {hotspots.length} Active Hotspots
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+                      {hotspots.map((h: any) => (
+                        <div key={h.cluster_id} className="p-4 rounded-xl border border-teal-100 bg-teal-50/40 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-teal-900 tracking-tight">{h.cluster_id}</span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-200 text-teal-900">
+                                {h.complaint_count || h.count || 3} Reports Merged
+                              </span>
+                            </div>
+                            <p className="text-xs font-bold text-slate-900 mt-2 line-clamp-1">{h.primary_title || h.department}</p>
+                            <p className="text-[11px] text-slate-600 mt-0.5 line-clamp-1">{h.address_sample || h.location || 'Local corridor'}</p>
+                          </div>
+                          <div className="mt-3 pt-2.5 border-t border-teal-200/60 flex items-center justify-between text-[11px] text-slate-600 font-mono">
+                            <span>({(h.centroid_lat || h.latitude || 16.5).toFixed(3)}, {(h.centroid_lng || h.longitude || 80.6).toFixed(3)})</span>
+                            <span className="text-teal-800 font-bold">Priority Unit</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ============================================================ */}
+            {/* VIEW 2: COMPLAINTS TAB (Dedicated Field Work Orders)         */}
+            {/* ============================================================ */}
+            {activeTab === 'Complaints' && (
+              <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-2xs text-slate-800 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900">Field Work Orders Management</h2>
+                    <p className="text-xs text-slate-500">
+                      Direct queue assigned to <span className="font-bold text-teal-700">{currentEmpCode}</span>. Update status and attach resolution proof photos.
+                    </p>
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {(['All', 'In progress', 'New', 'Resolved'] as const).map((st) => (
+                      <button
+                        key={st}
+                        onClick={() => setStatusFilter(st)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          statusFilter === st
+                            ? 'bg-teal-600 text-white shadow-xs'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Complaint Cards Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  {filteredComplaints.length === 0 ? (
+                    <div className="col-span-2 py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
+                      <Inbox size={32} className="mx-auto text-slate-300 mb-2" />
+                      <p className="font-bold text-slate-700">No work orders match this filter</p>
+                      <p className="text-xs text-slate-400 mt-1">Try clearing your search query or selecting a different status filter.</p>
+                    </div>
+                  ) : (
+                    filteredComplaints.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-teal-300 hover:shadow-md transition-all flex flex-col justify-between space-y-3"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-black text-sm text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                              {item.id}
+                            </span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${getStatusBadge(item.status)}`}>
+                              {item.status}
+                            </span>
+                          </div>
+
+                          <h4 className="text-sm font-bold text-slate-900 line-clamp-2">
+                            {item.title || `${item.category} Incident at ${item.location}`}
+                          </h4>
+
+                          <div className="space-y-1 text-xs text-slate-600">
+                            <div className="flex items-center gap-1.5">
+                              <MapPin size={13} className="text-teal-600 shrink-0" />
+                              <span className="truncate">{item.location}</span>
+                            </div>
+                            {item.landmark && (
+                              <div className="text-[11px] text-slate-500 pl-5">
+                                Landmark: <strong>{item.landmark}</strong> {item.ward ? `(Ward ${item.ward})` : ''}
+                              </div>
+                            )}
+                            {item.sla && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-amber-700 pl-5">
+                                <Clock size={11} />
+                                <span>SLA: {item.sla}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {item.resolutionProofUrl && (
+                            <div className="mt-2 pt-2 border-t border-slate-200">
+                              <span className="text-[10px] font-bold text-emerald-700 uppercase block mb-1">Attached Completion Proof</span>
+                              <img
+                                src={item.resolutionProofUrl}
+                                alt="Resolution evidence"
+                                className="w-24 h-24 object-cover rounded-xl border border-emerald-300 shadow-2xs"
+                              />
+                            </div>
+                          )}
+
+                          {item.resolutionNotes && (
+                            <p className="text-xs text-slate-600 bg-white p-2.5 rounded-xl border border-slate-200 italic">
+                              "{item.resolutionNotes}"
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Card Footer Actions */}
+                        <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
+                          <div className="text-[11px] font-bold text-slate-500">
+                            Priority: <span className="text-rose-600">{item.priority || 'Medium'}</span> {item.priorityScore ? `(${Math.round(item.priorityScore)}/100)` : ''}
+                          </div>
+
+                          <button
+                            onClick={() => {
+                              setEditingComplaint(item);
+                              setEditStatus(item.status === 'Resolved' ? 'Resolved' : 'In progress');
+                              setEditTeam(item.assignedTeam);
+                              setResolutionNotes(item.resolutionNotes || '');
+                              setResolutionProof(item.resolutionProofUrl || null);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs shadow-xs transition cursor-pointer"
+                          >
+                            <CheckCircle2 size={13} />
+                            <span>Update Resolution</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================ */}
+            {/* VIEW 3: DEPARTMENT QUEUE TAB (Open items to pick up)          */}
+            {/* ============================================================ */}
+            {activeTab === 'Department Queue' && (
+              <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-2xs text-slate-800 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900">Municipal Department Intake Queue</h2>
+                    <p className="text-xs text-slate-500">
+                      Broad department cases awaiting field dispatch. You can self-assign any open task to your work queue.
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold text-teal-800 bg-teal-50 px-3 py-1.5 rounded-xl border border-teal-200">
+                    {departmentQueue.length} Active Intake Cases
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto pt-2">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 font-semibold">
+                        <th className="pb-3">Case ID</th>
+                        <th className="pb-3">Title & Category</th>
+                        <th className="pb-3">Location & Landmark</th>
+                        <th className="pb-3">Priority Score</th>
+                        <th className="pb-3">Current Assignment</th>
+                        <th className="pb-3 text-right pr-2">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {departmentQueue.map((item) => {
+                        const isAssignedToMe = item.assignedEmployeeId === currentEmpCode;
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3.5 font-bold text-slate-900 font-mono">{item.id}</td>
+                            <td className="py-3.5">
+                              <div className="font-bold text-slate-900 line-clamp-1">{item.title}</div>
+                              <div className="text-[11px] text-teal-700 font-semibold">{item.category}</div>
+                            </td>
+                            <td className="py-3.5 text-slate-600 max-w-[220px] truncate">
+                              {item.location} {item.landmark ? `(${item.landmark})` : ''}
+                            </td>
+                            <td className="py-3.5">
+                              <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                {item.priority || 'Medium'} {item.priorityScore ? `(${Math.round(item.priorityScore)})` : ''}
+                              </span>
+                            </td>
+                            <td className="py-3.5 font-medium">
+                              {isAssignedToMe ? (
+                                <span className="text-emerald-700 font-bold">Assigned to You</span>
+                              ) : item.assignedEmployeeId ? (
+                                <span className="text-slate-600">{item.assignedEmployeeId}</span>
+                              ) : (
+                                <span className="text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                  Unassigned
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 text-right pr-2">
+                              {isAssignedToMe ? (
+                                <span className="text-xs font-bold text-emerald-600 inline-flex items-center gap-1">
+                                  <Check size={14} /> In your queue
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelfAssign(item)}
+                                  className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs shadow-xs transition cursor-pointer"
+                                >
+                                  Pick Up Task
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================ */}
+            {/* VIEW 4: MAP VIEW TAB (Geospatial Cadre Grid)                  */}
+            {/* ============================================================ */}
+            {activeTab === 'Map View' && (
+              <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-2xs text-slate-800 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900">Geospatial GIS Cadre Map</h2>
+                    <p className="text-xs text-slate-500">
+                      Geographic distribution of municipal complaints and cluster hotspots across Andhra Pradesh.
+                    </p>
+                  </div>
+                  <div className="text-xs font-bold text-slate-600 flex items-center gap-3">
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" /> Critical</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> High/Medium</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Resolved</span>
+                  </div>
+                </div>
+
+                {/* Spatial Map Canvas Mock with Real Data Coordinates */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                  <div className="lg:col-span-2 relative bg-slate-950 rounded-2xl p-6 h-96 flex flex-col justify-between overflow-hidden border border-slate-800 shadow-inner">
+                    {/* Background Grid Lines simulating Map Tile */}
+                    <div className="absolute inset-0 opacity-15 pointer-events-none" style={{
+                      backgroundImage: 'radial-gradient(#14b8a6 1px, transparent 1px)',
+                      backgroundSize: '24px 24px'
+                    }} />
+
+                    {/* Header overlay */}
+                    <div className="relative z-10 flex items-center justify-between text-xs text-teal-400 font-mono">
+                      <span>AP MUNICIPAL GIS &bull; SPATIAL CADRE RADAR</span>
+                      <span>ACTIVE HOTSPOTS: {hotspots.length}</span>
+                    </div>
+
+                    {/* Interactive Map Pins */}
+                    <div className="relative z-10 flex-1 flex items-center justify-around flex-wrap gap-4 p-4">
+                      {complaints.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => setSelectedPinComplaint(item)}
+                          className={`group flex flex-col items-center transition-transform hover:scale-110 cursor-pointer ${
+                            selectedPinComplaint?.id === item.id ? 'scale-110' : ''
+                          }`}
+                        >
+                          <div
+                            className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-lg border-2 ${
+                              item.priority?.toLowerCase() === 'critical'
+                                ? 'bg-rose-600 border-rose-300'
+                                : item.status === 'Resolved'
+                                ? 'bg-emerald-600 border-emerald-300'
+                                : 'bg-amber-500 border-amber-300'
+                            }`}
+                          >
+                            <MapPin size={18} />
+                          </div>
+                          <span className="text-[10px] font-bold text-white bg-slate-900/90 px-2 py-0.5 rounded-full mt-1 border border-slate-700">
+                            {item.id}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Footer bar */}
+                    <div className="relative z-10 flex items-center justify-between text-[11px] text-slate-400 font-mono border-t border-slate-800/80 pt-2">
+                      <span>Coordinates: 16.5062° N, 80.6480° E (AP Grid)</span>
+                      <span>Live Satellite Layer &bull; OpenStreetMap</span>
+                    </div>
+                  </div>
+
+                  {/* Selected Pin Details Card */}
+                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between space-y-3">
+                    {selectedPinComplaint ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                            {selectedPinComplaint.id}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getStatusBadge(selectedPinComplaint.status)}`}>
+                            {selectedPinComplaint.status}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900">{selectedPinComplaint.title}</h4>
+                          <p className="text-xs text-slate-500 mt-1">{selectedPinComplaint.category}</p>
+                        </div>
+
+                        <div className="text-xs text-slate-700 space-y-1 bg-white p-3 rounded-xl border border-slate-200">
+                          <div><strong>Location:</strong> {selectedPinComplaint.location}</div>
+                          {selectedPinComplaint.landmark && <div><strong>Landmark:</strong> {selectedPinComplaint.landmark}</div>}
+                          {selectedPinComplaint.ward && <div><strong>Ward:</strong> {selectedPinComplaint.ward}</div>}
+                          <div><strong>Priority Score:</strong> {Math.round(selectedPinComplaint.priorityScore || 75)}/100</div>
+                          <div><strong>Assigned To:</strong> {selectedPinComplaint.assignedEmployeeId || 'Unassigned'}</div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingComplaint(selectedPinComplaint);
+                            setEditStatus(selectedPinComplaint.status === 'Resolved' ? 'Resolved' : 'In progress');
+                            setEditTeam(selectedPinComplaint.assignedTeam);
+                          }}
+                          className="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                        >
+                          Take Action on this Incident
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="my-auto text-center py-8 text-slate-400">
+                        <MapPin size={28} className="mx-auto text-slate-300 mb-2" />
+                        <p className="text-xs font-bold text-slate-700">Click any map pin on the left</p>
+                        <p className="text-[11px] text-slate-400 mt-1">To view live incident coordinates, category, and citizen report details.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================ */}
+            {/* VIEW 5: REPORTS & ANALYTICS TAB                              */}
+            {/* ============================================================ */}
+            {activeTab === 'Reports & Analytics' && (
+              <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-2xs text-slate-800 space-y-6">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">Cadre Performance Dossier & Analytics</h2>
+                  <p className="text-xs text-slate-500">
+                    Official resolution performance audit for officer <span className="font-bold text-teal-700">{currentEmpCode}</span> under AP Municipal Administration guidelines.
+                  </p>
+                </div>
+
+                {/* Scorecards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-xl bg-teal-50 border border-teal-100">
+                    <span className="text-xs font-bold text-teal-700 uppercase">SLA Compliance</span>
+                    <div className="text-2xl font-black text-teal-900 mt-1">94.2%</div>
+                    <span className="text-[10px] text-teal-600 font-semibold">Exceeds state target</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
+                    <span className="text-xs font-bold text-blue-700 uppercase">Avg. Turnaround</span>
+                    <div className="text-2xl font-black text-blue-900 mt-1">
+                      {employeeStats?.avg_resolution_days ? `${employeeStats.avg_resolution_days} Days` : '1.8 Days'}
+                    </div>
+                    <span className="text-[10px] text-blue-600 font-semibold">Standard SLA 48h</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100">
+                    <span className="text-xs font-bold text-emerald-700 uppercase">Completed Work</span>
+                    <div className="text-2xl font-black text-emerald-900 mt-1">
+                      {employeeStats?.completed_count ?? resolvedMyTasks}
+                    </div>
+                    <span className="text-[10px] text-emerald-600 font-semibold">Verified with proof</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-amber-50 border border-amber-100">
+                    <span className="text-xs font-bold text-amber-700 uppercase">Citizen Rating</span>
+                    <div className="text-2xl font-black text-amber-900 mt-1">
+                      {employeeStats?.rating ? `${employeeStats.rating} / 5.0` : '4.8 / 5.0'}
+                    </div>
+                    <span className="text-[10px] text-amber-600 font-semibold">Cadre Tier 1</span>
+                  </div>
+                </div>
+
+                {/* Download Dossier */}
+                <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50 flex items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900">Official Cadre Evaluation Summary</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">Download official CSV performance log signed with AP Municipal Administration timestamp.</p>
+                  </div>
+                  <button
+                    onClick={handleExportReport}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs shadow-xs transition cursor-pointer shrink-0"
+                  >
+                    <Download size={14} />
+                    <span>Download Dossier</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================ */}
+            {/* VIEW 6: TEAM MANAGEMENT TAB                                  */}
+            {/* ============================================================ */}
+            {activeTab === 'Team Management' && (
+              <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-2xs text-slate-800 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900">Municipal Cadre Division Team</h2>
+                    <p className="text-xs text-slate-500">
+                      Officers and engineers deployed across the municipal engineering wings in your corporation.
+                    </p>
+                  </div>
+
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={colleagueSearch}
+                      onChange={(e) => setColleagueSearch(e.target.value)}
+                      placeholder="Search colleague or designation"
+                      className="pl-9 pr-3.5 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+                  {colleaguesList
+                    .filter((c) =>
+                      !colleagueSearch.trim() ||
+                      c.name.toLowerCase().includes(colleagueSearch.toLowerCase()) ||
+                      c.designation?.toLowerCase().includes(colleagueSearch.toLowerCase()) ||
+                      c.department?.toLowerCase().includes(colleagueSearch.toLowerCase())
+                    )
+                    .map((colleague) => (
+                      <div
+                        key={colleague.id}
+                        className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:shadow-xs transition space-y-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 font-black text-sm flex items-center justify-center shrink-0">
+                            {colleague.initials || colleague.name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold text-slate-900 truncate">{colleague.name}</h4>
+                            <p className="text-[11px] text-teal-700 font-semibold truncate">{colleague.designation || 'Municipal Engineer'}</p>
+                            <span className="font-mono text-[10px] text-slate-400 font-bold">{colleague.id}</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 text-center text-[10px] bg-white p-2 rounded-xl border border-slate-100">
+                          <div>
+                            <span className="text-slate-400 block font-semibold">Assigned</span>
+                            <span className="font-black text-slate-800">{colleague.assigned_count ?? 24}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block font-semibold">Done</span>
+                            <span className="font-black text-emerald-600">{colleague.completed_count ?? 20}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block font-semibold">Pending</span>
+                            <span className="font-black text-amber-600">{colleague.pending_count ?? 4}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] pt-1">
+                          <span className="text-slate-500">{colleague.department}</span>
+                          <span className="text-emerald-700 font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Active Cadre
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================ */}
+            {/* VIEW 7: SETTINGS TAB                                         */}
+            {/* ============================================================ */}
+            {activeTab === 'Settings' && (
+              <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-2xs text-slate-800 space-y-6 max-w-3xl">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">Cadre Officer Profile & Alert Preferences</h2>
+                  <p className="text-xs text-slate-500">
+                    Configuration settings for employee <span className="font-bold text-teal-700">{currentEmpCode}</span>.
+                  </p>
+                </div>
+
+                {/* Profile Details */}
+                <div className="space-y-4 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Officer Name</label>
+                      <input
+                        type="text"
+                        disabled
+                        value={profile?.name || employeeStats?.name || 'A. Ramesh Kumar'}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Employee Code</label>
+                      <input
+                        type="text"
+                        disabled
+                        value={currentEmpCode}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 font-mono font-bold text-teal-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Cadre Designation</label>
+                      <input
+                        type="text"
+                        disabled
+                        value={profile?.designation || employeeStats?.designation || 'Field Executive Engineer'}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Municipal Department Wing</label>
+                      <input
+                        type="text"
+                        disabled
+                        value={profile?.departmentName || 'Roads & Buildings'}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Notification Alert Toggles */}
+                  <div className="pt-4 border-t border-slate-200 space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">Dispatch Notification Alerts</h4>
+                    
+                    <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50/60 cursor-pointer">
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">SMS Critical Dispatch Alerts</div>
+                        <div className="text-[11px] text-slate-500">Immediate SMS when a priority 95+ critical case is assigned</div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={alertSms}
+                        onChange={(e) => setAlertSms(e.target.checked)}
+                        className="w-4 h-4 accent-teal-600 rounded"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50/60 cursor-pointer">
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">Daily Workload Digest Email</div>
+                        <div className="text-[11px] text-slate-500">Daily 8:00 AM summary of pending cases and SLA deadlines</div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={alertEmail}
+                        onChange={(e) => setAlertEmail(e.target.checked)}
+                        className="w-4 h-4 accent-teal-600 rounded"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50/60 cursor-pointer">
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">Emergency Dispatch Audio Tone</div>
+                        <div className="text-[11px] text-slate-500">Chime alert when new emergency case drops into department intake</div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={soundAlert}
+                        onChange={(e) => setSoundAlert(e.target.checked)}
+                        className="w-4 h-4 accent-teal-600 rounded"
+                      />
+                    </label>
+                  </div>
+
+                  {settingsSaved && (
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                      <CheckCircle2 size={16} />
+                      <span>Officer preferences saved successfully!</span>
+                    </div>
+                  )}
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsSaved(true);
+                        setTimeout(() => setSettingsSaved(false), 3000);
+                      }}
+                      className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs shadow-xs transition cursor-pointer"
+                    >
+                      Save Preferences
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* BOTTOM FOOTER */}
+            <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
+              <div>NEXCIV Staff Workspace &middot; Municipal Cadre Admin</div>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => alert(`NEXCIV Help Desk: helpdesk@nexciv.gov\nCadre ID: ${currentEmpCode}`)}
+                  className="hover:text-slate-200 transition cursor-pointer"
+                >
+                  Help
+                </button>
+                <button
+                  onClick={() => alert('NEXCIV Municipal Data Security & Privacy Policy')}
+                  className="hover:text-slate-200 transition cursor-pointer"
+                >
+                  Privacy
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </main>
+      </div>
+
+      {/* WORK RESOLUTION & PROOF SUBMISSION MODAL */}
+      {editingComplaint && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white text-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-black text-slate-900">
+                  Update Work Order Resolution
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Case <span className="font-mono font-bold text-teal-700">{editingComplaint.id}</span> &bull; {editingComplaint.category} &bull; {editingComplaint.location}
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingComplaint(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 pt-1">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Work Order Status</label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as ComplaintItem['status'])}
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none font-bold"
+                >
+                  <option value="In progress">In progress (Crew deployed on site)</option>
+                  <option value="Resolved">Resolved (Work completed & proof attached)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Upload Resolution Proof Photo (Evidence of Completed Work)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => setResolutionProof(reader.result as string);
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                />
+                {resolutionProof && (
+                  <div className="mt-2.5 relative inline-block">
+                    <img src={resolutionProof} alt="Repair proof" className="w-28 h-28 object-cover rounded-xl border-2 border-emerald-400 shadow-sm" />
+                    <button
+                      type="button"
+                      onClick={() => setResolutionProof(null)}
+                      className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-1 shadow cursor-pointer"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Engineer Completion Remarks & Details
+                </label>
+                <textarea
+                  rows={3}
+                  value={resolutionNotes}
+                  onChange={(e) => setResolutionNotes(e.target.value)}
+                  placeholder="e.g. Filled crater with bituminous asphalt; surface leveled and rolled. Reopened street for normal traffic."
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none font-medium resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setEditingComplaint(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={savingResolution}
+                onClick={handleSaveEdit}
+                className="px-5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <CheckCircle2 size={14} />
+                <span>{savingResolution ? 'Saving...' : 'Submit Proof & Update Work Order'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
