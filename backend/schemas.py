@@ -152,6 +152,7 @@ class EmployeeResponse(BaseModel):
     department_name: str
     designation: str
     zone: str
+    municipality_code: Optional[str] = 'ELR'
     status: Optional[str] = 'active'
     assigned_count: Optional[int] = 0
     completed_count: Optional[int] = 0
@@ -166,16 +167,18 @@ class EmployeeResponse(BaseModel):
     updated_at: Optional[str] = None
 
 class EmployeeCreate(BaseModel):
-    employee_code: str
+    employee_code: Optional[str] = None
     name: str
-    email: str
+    email: Optional[str] = None
     department: str
     department_name: Optional[str] = None
-    designation: str
-    zone: str
+    designation: Optional[str] = 'Municipal Engineer'
+    zone: Optional[str] = 'Central Zone'
     phone: Optional[str] = None
     initials: Optional[str] = None
     skills: Optional[str] = None
+    municipality_code: Optional[str] = 'ELR'
+    password: Optional[str] = 'pass123'
 
 class EmployeeUpdate(BaseModel):
     name: Optional[str] = None

@@ -94,6 +94,7 @@ export interface HotspotCluster {
 }
 
 export const AP_CORPORATIONS: APCorporation[] = [
+  // 17 Municipal Corporations
   { code: 'GVMC', name: 'Greater Visakhapatnam Municipal Corporation', short_name: 'Visakhapatnam', district: 'Visakhapatnam', headquarters: 'Asilmetta, Visakhapatnam', contact_email: 'commissioner_gvmc@yahoo.co.in', contact_phone: '0891-2746300', wards_count: 98, population: '23.5 Lakhs' },
   { code: 'VMC', name: 'Vijayawada Municipal Corporation', short_name: 'Vijayawada', district: 'NTR', headquarters: 'Canal Road, Vijayawada', contact_email: 'ourvmc@yahoo.com', contact_phone: '0866-2422400', wards_count: 64, population: '14.8 Lakhs' },
   { code: 'GMC', name: 'Guntur Municipal Corporation', short_name: 'Guntur', district: 'Guntur', headquarters: 'Opp. Collectorate, Guntur', contact_email: 'commissionerguntur@gmail.com', contact_phone: '0863-2224202', wards_count: 57, population: '10.2 Lakhs' },
@@ -110,8 +111,71 @@ export const AP_CORPORATIONS: APCorporation[] = [
   { code: 'NDL', name: 'Nandyal Municipal Corporation', short_name: 'Nandyal', district: 'Nandyal', headquarters: 'Sanjeeva Nagar, Nandyal', contact_email: 'commr_ndl@yahoo.co.in', contact_phone: '08514-242200', wards_count: 42, population: '2.9 Lakhs' },
   { code: 'MCT', name: 'Machilipatnam Municipal Corporation', short_name: 'Machilipatnam', district: 'Krishna', headquarters: 'Fort Road, Machilipatnam', contact_email: 'commr_mct@yahoo.co.in', contact_phone: '08672-222333', wards_count: 50, population: '2.8 Lakhs' },
   { code: 'CTR', name: 'Chittoor Municipal Corporation', short_name: 'Chittoor', district: 'Chittoor', headquarters: 'Church Street, Chittoor', contact_email: 'commr_chittoor@yahoo.co.in', contact_phone: '08572-232444', wards_count: 50, population: '2.6 Lakhs' },
-  { code: 'SKLM', name: 'Srikakulam Municipal Corporation', short_name: 'Srikakulam', district: 'Srikakulam', headquarters: 'Seven Road Junction, Srikakulam', contact_email: 'commr_sklm@yahoo.co.in', contact_phone: '08942-222555', wards_count: 50, population: '2.5 Lakhs' }
+  { code: 'SKLM', name: 'Srikakulam Municipal Corporation', short_name: 'Srikakulam', district: 'Srikakulam', headquarters: 'Seven Road Junction, Srikakulam', contact_email: 'commr_sklm@yahoo.co.in', contact_phone: '08942-222555', wards_count: 50, population: '2.5 Lakhs' },
+
+  // West Godavari & Eluru Municipalities
+  { code: 'BVM', name: 'Bhimavaram Municipality', short_name: 'Bhimavaram', district: 'West Godavari', headquarters: 'Main Road, Bhimavaram', contact_email: 'commr_bvm@yahoo.com', contact_phone: '08816-223456', wards_count: 39, population: '2.1 Lakhs' },
+  { code: 'TPG', name: 'Tadepalligudem Municipality', short_name: 'Tadepalligudem', district: 'West Godavari', headquarters: 'Municipal Office, TPG', contact_email: 'commr_tpg@yahoo.com', contact_phone: '08818-222333', wards_count: 35, population: '1.8 Lakhs' },
+  { code: 'TNK', name: 'Tanuku Municipality', short_name: 'Tanuku', district: 'West Godavari', headquarters: 'Town Hall, Tanuku', contact_email: 'commr_tnk@yahoo.com', contact_phone: '08819-224455', wards_count: 34, population: '1.5 Lakhs' },
+  { code: 'PLK', name: 'Palakollu Municipality', short_name: 'Palakollu', district: 'West Godavari', headquarters: 'Municipal Road, Palakollu', contact_email: 'commr_plk@yahoo.com', contact_phone: '08814-222111', wards_count: 31, population: '1.2 Lakhs' },
+  { code: 'NSP', name: 'Narasapuram Municipality', short_name: 'Narasapuram', district: 'West Godavari', headquarters: 'Collector Road, Narasapuram', contact_email: 'commr_nsp@yahoo.com', contact_phone: '08814-277888', wards_count: 31, population: '1.1 Lakhs' },
+  { code: 'JRG', name: 'Jangareddygudem Municipality', short_name: 'Jangareddygudem', district: 'Eluru', headquarters: 'Municipal Office, JRG', contact_email: 'commr_jrg@yahoo.com', contact_phone: '08821-225544', wards_count: 28, population: '85,000' },
+  { code: 'KVR', name: 'Kovvur Municipality', short_name: 'Kovvur', district: 'East Godavari', headquarters: 'Gautami Road, Kovvur', contact_email: 'commr_kvr@yahoo.com', contact_phone: '08813-231200', wards_count: 23, population: '65,000' },
+  { code: 'NDV', name: 'Nidadavole Municipality', short_name: 'Nidadavole', district: 'East Godavari', headquarters: 'Municipal Complex, Nidadavole', contact_email: 'commr_ndv@yahoo.com', contact_phone: '08813-222400', wards_count: 28, population: '75,000' },
+
+  // Krishna & NTR Municipalities
+  { code: 'GDV', name: 'Gudivada Municipality', short_name: 'Gudivada', district: 'Krishna', headquarters: 'Nehru Chowk, Gudivada', contact_email: 'commr_gdv@yahoo.com', contact_phone: '08674-243300', wards_count: 36, population: '1.6 Lakhs' },
+  { code: 'NZD', name: 'Nuzvid Municipality', short_name: 'Nuzvid', district: 'Eluru', headquarters: 'Fort Road, Nuzvid', contact_email: 'commr_nzd@yahoo.com', contact_phone: '08656-232200', wards_count: 32, population: '1.1 Lakhs' },
+  { code: 'JPT', name: 'Jaggaiahpeta Municipality', short_name: 'Jaggaiahpeta', district: 'NTR', headquarters: 'RTC Road, Jaggaiahpeta', contact_email: 'commr_jpt@yahoo.com', contact_phone: '08654-222100', wards_count: 31, population: '90,000' },
+  { code: 'KDP', name: 'Kondapalli Municipality', short_name: 'Kondapalli', district: 'NTR', headquarters: 'Fort Gate, Kondapalli', contact_email: 'commr_kdp@yahoo.com', contact_phone: '0866-2871100', wards_count: 29, population: '78,000' },
+  { code: 'NDG', name: 'Nandigama Municipality', short_name: 'Nandigama', district: 'NTR', headquarters: 'NH-65, Nandigama', contact_email: 'commr_ndg@yahoo.com', contact_phone: '08678-275200', wards_count: 20, population: '60,000' },
+  { code: 'VYR', name: 'Vuyyuru Municipality', short_name: 'Vuyyuru', district: 'Krishna', headquarters: 'Sugar Factory Road, Vuyyuru', contact_email: 'commr_vyr@yahoo.com', contact_phone: '08676-233200', wards_count: 20, population: '55,000' },
+
+  // Guntur, Palnadu & Bapatla Municipalities
+  { code: 'TNL', name: 'Tenali Municipality', short_name: 'Tenali', district: 'Guntur', headquarters: 'Bose Road, Tenali', contact_email: 'commr_tnl@yahoo.com', contact_phone: '08644-223400', wards_count: 40, population: '2.2 Lakhs' },
+  { code: 'MTMC', name: 'Mangalagiri-Tadepalli Municipal Corporation', short_name: 'Mangalagiri', district: 'Guntur', headquarters: 'GT Road, Mangalagiri', contact_email: 'commr_mtmc@yahoo.com', contact_phone: '08645-232100', wards_count: 50, population: '3.5 Lakhs' },
+  { code: 'NRP', name: 'Narasaraopet Municipality', short_name: 'Narasaraopet', district: 'Palnadu', headquarters: 'Arundelpet, Narasaraopet', contact_email: 'commr_nrp@yahoo.com', contact_phone: '08647-223300', wards_count: 34, population: '1.7 Lakhs' },
+  { code: 'CKP', name: 'Chilakaluripet Municipality', short_name: 'Chilakaluripet', district: 'Palnadu', headquarters: 'NH-16, Chilakaluripet', contact_email: 'commr_ckp@yahoo.com', contact_phone: '08647-254100', wards_count: 38, population: '1.4 Lakhs' },
+  { code: 'STP', name: 'Sattenapalle Municipality', short_name: 'Sattenapalle', district: 'Palnadu', headquarters: 'Station Road, Sattenapalle', contact_email: 'commr_stp@yahoo.com', contact_phone: '08641-232200', wards_count: 31, population: '95,000' },
+  { code: 'VNK', name: 'Vinukonda Municipality', short_name: 'Vinukonda', district: 'Palnadu', headquarters: 'Municipal Office, Vinukonda', contact_email: 'commr_vnk@yahoo.com', contact_phone: '08646-272200', wards_count: 32, population: '80,000' },
+  { code: 'PGR', name: 'Piduguralla Municipality', short_name: 'Piduguralla', district: 'Palnadu', headquarters: 'Lime City Road, Piduguralla', contact_email: 'commr_pgr@yahoo.com', contact_phone: '08649-252200', wards_count: 33, population: '90,000' },
+  { code: 'BPT', name: 'Bapatla Municipality', short_name: 'Bapatla', district: 'Bapatla', headquarters: 'College Road, Bapatla', contact_email: 'commr_bpt@yahoo.com', contact_phone: '08643-224100', wards_count: 34, population: '1.1 Lakhs' },
+  { code: 'CRL', name: 'Chirala Municipality', short_name: 'Chirala', district: 'Bapatla', headquarters: 'Cloth Market Road, Chirala', contact_email: 'commr_crl@yahoo.com', contact_phone: '08594-232100', wards_count: 33, population: '1.3 Lakhs' },
+  { code: 'RPL', name: 'Repalle Municipality', short_name: 'Repalle', district: 'Bapatla', headquarters: 'Station Road, Repalle', contact_email: 'commr_rpl@yahoo.com', contact_phone: '08648-222300', wards_count: 28, population: '70,000' },
+  { code: 'PNR', name: 'Ponnur Municipality', short_name: 'Ponnur', district: 'Guntur', headquarters: 'Bhavanarayana Temple Road, Ponnur', contact_email: 'commr_pnr@yahoo.com', contact_phone: '08643-242200', wards_count: 31, population: '85,000' },
+
+  // East Godavari, Kakinada & Konaseema Municipalities
+  { code: 'AMP', name: 'Amalapuram Municipality', short_name: 'Amalapuram', district: 'Dr. B.R. Ambedkar Konaseema', headquarters: 'Clock Tower, Amalapuram', contact_email: 'commr_amp@yahoo.com', contact_phone: '08856-231100', wards_count: 30, population: '1.0 Lakhs' },
+  { code: 'MDP', name: 'Mandapeta Municipality', short_name: 'Mandapeta', district: 'Dr. B.R. Ambedkar Konaseema', headquarters: 'Main Road, Mandapeta', contact_email: 'commr_mdp@yahoo.com', contact_phone: '08855-232100', wards_count: 30, population: '95,000' },
+  { code: 'RCP', name: 'Ramachandrapuram Municipality', short_name: 'Ramachandrapuram', district: 'Dr. B.R. Ambedkar Konaseema', headquarters: 'Fort Road, RCP', contact_email: 'commr_rcp@yahoo.com', contact_phone: '08857-242100', wards_count: 28, population: '85,000' },
+  { code: 'SMK', name: 'Samalkota Municipality', short_name: 'Samalkota', district: 'Kakinada', headquarters: 'Station Road, Samalkota', contact_email: 'commr_smk@yahoo.com', contact_phone: '0884-2327200', wards_count: 31, population: '90,000' },
+  { code: 'PTP', name: 'Pithapuram Municipality', short_name: 'Pithapuram', district: 'Kakinada', headquarters: 'Padagaya Road, Pithapuram', contact_email: 'commr_ptp@yahoo.com', contact_phone: '08869-251200', wards_count: 30, population: '80,000' },
+  { code: 'PDP', name: 'Peddapuram Municipality', short_name: 'Peddapuram', district: 'Kakinada', headquarters: 'Main Road, Peddapuram', contact_email: 'commr_pdp@yahoo.com', contact_phone: '08852-241200', wards_count: 29, population: '75,000' },
+  { code: 'TUN', name: 'Tuni Municipality', short_name: 'Tuni', district: 'Kakinada', headquarters: 'NH-16, Tuni', contact_email: 'commr_tun@yahoo.com', contact_phone: '08854-251200', wards_count: 30, population: '85,000' },
+
+  // Prakasam, SPSR Nellore & Rayalaseema Municipalities
+  { code: 'MKP', name: 'Markapur Municipality', short_name: 'Markapur', district: 'Prakasam', headquarters: 'Slate Town Road, Markapur', contact_email: 'commr_mkp@yahoo.com', contact_phone: '08596-222100', wards_count: 35, population: '1.1 Lakhs' },
+  { code: 'KND', name: 'Kandukur Municipality', short_name: 'Kandukur', district: 'SPSR Nellore', headquarters: 'Sub-Collector Road, Kandukur', contact_email: 'commr_knd@yahoo.com', contact_phone: '08598-223100', wards_count: 33, population: '95,000' },
+  { code: 'KVL', name: 'Kavali Municipality', short_name: 'Kavali', district: 'SPSR Nellore', headquarters: 'Trunk Road, Kavali', contact_email: 'commr_kvl@yahoo.com', contact_phone: '08626-241100', wards_count: 40, population: '1.5 Lakhs' },
+  { code: 'GDR', name: 'Gudur Municipality', short_name: 'Gudur', district: 'Tirupati', headquarters: 'Mica Town Road, Gudur', contact_email: 'commr_gdr@yahoo.com', contact_phone: '08624-251100', wards_count: 33, population: '1.0 Lakhs' },
+  { code: 'SLP', name: 'Sullurpeta Municipality', short_name: 'Sullurpeta', district: 'Tirupati', headquarters: 'SHAR Road, Sullurpeta', contact_email: 'commr_slp@yahoo.com', contact_phone: '08623-241100', wards_count: 25, population: '65,000' },
+  { code: 'SKH', name: 'Srikalahasti Municipality', short_name: 'Srikalahasti', district: 'Tirupati', headquarters: 'Temple Road, Srikalahasti', contact_email: 'commr_skh@yahoo.com', contact_phone: '08578-222200', wards_count: 33, population: '1.2 Lakhs' },
+  { code: 'MPL', name: 'Madanapalle Municipality', short_name: 'Madanapalle', district: 'Annamayya', headquarters: 'Bangalore Road, Madanapalle', contact_email: 'commr_mpl@yahoo.com', contact_phone: '08571-222200', wards_count: 35, population: '2.0 Lakhs' },
+  { code: 'RYC', name: 'Rayachoti Municipality', short_name: 'Rayachoti', district: 'Annamayya', headquarters: 'Kadapa-Chittoor Road, Rayachoti', contact_email: 'commr_ryc@yahoo.com', contact_phone: '08561-255100', wards_count: 34, population: '1.4 Lakhs' },
+  { code: 'ADN', name: 'Adoni Municipality', short_name: 'Adoni', district: 'Kurnool', headquarters: 'Alur Road, Adoni', contact_email: 'commr_adn@yahoo.com', contact_phone: '08512-252100', wards_count: 42, population: '2.3 Lakhs' },
+  { code: 'YMG', name: 'Yemmiganur Municipality', short_name: 'Yemmiganur', district: 'Kurnool', headquarters: 'Weavers Colony Road, Yemmiganur', contact_email: 'commr_ymg@yahoo.com', contact_phone: '08512-255100', wards_count: 34, population: '1.3 Lakhs' },
+  { code: 'HDP', name: 'Hindupur Municipality', short_name: 'Hindupur', district: 'Sri Sathya Sai', headquarters: 'Main Road, Hindupur', contact_email: 'commr_hdp@yahoo.com', contact_phone: '08556-220100', wards_count: 38, population: '2.1 Lakhs' },
+  { code: 'GTK', name: 'Guntakal Municipality', short_name: 'Guntakal', district: 'Anantapur', headquarters: 'Railway Junction Road, Guntakal', contact_email: 'commr_gtk@yahoo.com', contact_phone: '08552-226100', wards_count: 37, population: '1.5 Lakhs' },
+  { code: 'DHM', name: 'Dharmavaram Municipality', short_name: 'Dharmavaram', district: 'Sri Sathya Sai', headquarters: 'Silk City Road, Dharmavaram', contact_email: 'commr_dhm@yahoo.com', contact_phone: '08559-222100', wards_count: 40, population: '1.6 Lakhs' },
+  { code: 'TDP', name: 'Tadipatri Municipality', short_name: 'Tadipatri', district: 'Anantapur', headquarters: 'Bugga Ramalingeswara Road, TDP', contact_email: 'commr_tdp@yahoo.com', contact_phone: '08558-222100', wards_count: 36, population: '1.3 Lakhs' },
+  { code: 'PDT', name: 'Proddatur Municipality', short_name: 'Proddatur', district: 'YSR Kadapa', headquarters: 'Gold Market Road, Proddatur', contact_email: 'commr_pdt@yahoo.com', contact_phone: '08564-251100', wards_count: 41, population: '2.4 Lakhs' },
+  { code: 'BBL', name: 'Bobbili Municipality', short_name: 'Bobbili', district: 'Vizianagaram', headquarters: 'Fort Road, Bobbili', contact_email: 'commr_bbl@yahoo.com', contact_phone: '08944-255100', wards_count: 31, population: '80,000' },
+  { code: 'PVP', name: 'Parvathipuram Municipality', short_name: 'Parvathipuram', district: 'Parvathipuram Manyam', headquarters: 'Main Road, Parvathipuram', contact_email: 'commr_pvp@yahoo.com', contact_phone: '08963-221100', wards_count: 30, population: '75,000' },
+  { code: 'PLS', name: 'Palasa-Kasibugga Municipality', short_name: 'Palasa', district: 'Srikakulam', headquarters: 'Cashew City Road, Palasa', contact_email: 'commr_pls@yahoo.com', contact_phone: '08945-241100', wards_count: 31, population: '80,000' }
 ];
+
+export const AP_MUNICIPALITIES = AP_CORPORATIONS;
+
 
 const DEPT_NAME_MAP: Record<string, string> = {
   road: 'Roads & Buildings Department (R&B / Municipal)',
@@ -904,13 +968,19 @@ export const api = {
     const resolved = complaints.filter(c => c.status === 'resolved').length;
     const critical = complaints.filter(c => c.priority === 'Critical').length;
 
+    const rate = total > 0 ? Math.round((resolved / total) * 100) : 0;
     return {
       total_complaints: total,
+      awaiting_assignment: pending,
       pending_complaints: pending,
+      in_progress: inProgress,
       in_progress_complaints: inProgress,
+      resolved: resolved,
       resolved_complaints: resolved,
       critical_complaints: critical,
-      resolution_rate: total > 0 ? Math.round((resolved / total) * 100) : 78,
+      overall_resolution_rate: rate,
+      resolution_rate: rate,
+      overdue_cases: 0,
       avg_resolution_hours: 18.5,
       department_breakdown: {
         road: complaints.filter(c => normalizeDeptCode(c.category) === 'road').length,
@@ -922,7 +992,69 @@ export const api = {
     };
   },
 
-  async getEmployees(filters?: { department?: string; status?: string; search?: string }): Promise<EmployeeRecord[]> {
+  async registerCitizen(payload: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    municipality_code?: string;
+    ward?: string;
+    address?: string;
+  }) {
+    const res = await fetch(`${API_URL}/api/auth/register-citizen`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Registration failed. Please check your details.');
+    }
+    return await res.json();
+  },
+
+  async loginCitizen(payload: { email: string; password: string }) {
+    const res = await fetch(`${API_URL}/api/auth/login-citizen`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Invalid email or password.');
+    }
+    return await res.json();
+  },
+
+  async createEmployee(payload: {
+    name: string;
+    employee_code?: string;
+    department: string;
+    department_name?: string;
+    designation?: string;
+    zone?: string;
+    phone?: string;
+    email?: string;
+    skills?: string;
+    municipality_code?: string;
+    password?: string;
+  }): Promise<EmployeeRecord> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/employees`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to create employee');
+    }
+    const created = await res.json();
+    window.dispatchEvent(new CustomEvent('nexciv_employees_updated', { detail: created }));
+    return created;
+  },
+
+  async getEmployees(filters?: { department?: string; status?: string; search?: string; municipality_code?: string }): Promise<EmployeeRecord[]> {
     try {
       const headers = await getAuthHeaders();
       const params = new URLSearchParams();
@@ -934,6 +1066,9 @@ export const api = {
       }
       if (filters?.search && filters.search.trim()) {
         params.append('search', filters.search.trim());
+      }
+      if (filters?.municipality_code && filters.municipality_code !== 'All') {
+        params.append('municipality_code', filters.municipality_code.toUpperCase());
       }
       const queryString = params.toString();
       const url = `${API_URL}/api/employees${queryString ? `?${queryString}` : ''}`;
@@ -948,7 +1083,7 @@ export const api = {
 
     // Query Supabase directly if backend unavailable
     try {
-      const { data: supEmps } = await supabase.from('employees').select('*').limit(50);
+      const { data: supEmps } = await supabase.from('employees').select('*').limit(100);
       if (supEmps && supEmps.length > 0) {
         return supEmps as EmployeeRecord[];
       }
@@ -991,81 +1126,6 @@ export const api = {
     return (AP_40_EMPLOYEES as EmployeeRecord[])[0];
   },
 
-  async createEmployee(data: {
-    employee_code: string;
-    name: string;
-    email: string;
-    department: string;
-    department_name?: string;
-    designation: string;
-    zone: string;
-    phone?: string;
-    skills?: string;
-  }): Promise<EmployeeRecord> {
-    try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${API_URL}/api/employees`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(data)
-      });
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch {}
-
-    // Direct Supabase insert
-    try {
-      const newEmpRow = {
-        employee_code: data.employee_code.toUpperCase(),
-        name: data.name,
-        initials: data.name.slice(0, 2).toUpperCase(),
-        email: data.email,
-        phone: data.phone || '+91 94401 00000',
-        department: data.department,
-        department_name: data.department_name || DEPT_NAME_MAP[data.department] || 'Municipal Services',
-        designation: data.designation,
-        zone: data.zone,
-        status: 'active',
-        assigned_count: 0,
-        completed_count: 0,
-        pending_count: 0,
-        overdue_count: 0,
-        avg_resolution_days: 2.0,
-        completion_rate: 100,
-        rating: 5.0,
-        performance: 'On track',
-        skills: data.skills || 'Municipal Engineering'
-      };
-      const { data: created, error } = await supabase.from('employees').insert(newEmpRow).select();
-      if (!error && created && created.length > 0) {
-        return created[0] as EmployeeRecord;
-      }
-    } catch {}
-
-    return {
-      id: `emp-${Date.now()}`,
-      employee_code: data.employee_code.toUpperCase(),
-      name: data.name,
-      initials: data.name.slice(0, 2).toUpperCase(),
-      email: data.email,
-      phone: data.phone,
-      department: data.department,
-      department_name: data.department_name || DEPT_NAME_MAP[data.department] || 'Municipal Services',
-      designation: data.designation,
-      zone: data.zone,
-      status: 'active',
-      assigned_count: 0,
-      completed_count: 0,
-      pending_count: 0,
-      overdue_count: 0,
-      avg_resolution_days: 2.0,
-      completion_rate: 100,
-      rating: 5.0,
-      performance: 'On track',
-      skills: data.skills
-    };
-  },
 
   async checkDuplicate(data: {
     title?: string;

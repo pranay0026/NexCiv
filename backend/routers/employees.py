@@ -42,39 +42,29 @@ def list_employees(
     status: Optional[str] = Query(None),
     zone: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    municipality_code: Optional[str] = Query(None),
     limit: int = Query(100, le=200),
     offset: int = Query(0),
     supabase: Client = Depends(get_supabase)
 ):
     """
     Returns list of municipal employees across Roads, Drainage, Water Supply, Street Lights, and Sanitation.
-    Supports filtering by department, status, zone, and search term.
+    Supports filtering by municipality, department, status, zone, and search term.
     """
-    db_results = []
-    
-    # 1. Try querying Supabase
-    if supabase is not None:
-        try:
-            query = supabase.table("employees").select("*")
-            if department and department.lower() != "all" and department != "All departments":
-                dept_clean = department.lower().replace(" ", "_")
-                query = query.eq("department", dept_clean)
-            if status and status.lower() != "all" and status != "All statuses":
-                query = query.eq("status", status.lower())
-            
-            res = query.order("employee_code").execute()
-            if res.data and len(res.data) > 0:
-                db_results = res.data
-        except Exception as e:
-            # Table might not exist yet or RLS restriction
-            pass
-
-    # 2. If Supabase has data, use it; otherwise use local fallback data
-    source = db_results if len(db_results) > 0 else _MEMORY_EMPLOYEES
+    from data_manager import get_employees_by_municipality
+    source = get_employees_by_municipality(municipality_code) if municipality_code and municipality_code.lower() != 'all' else _MEMORY_EMPLOYEES
 
     # Apply in-memory filtering for local fallback or extra search
     filtered = []
     for emp in source:
+        # Municipality filter
+        if municipality_code and municipality_code.lower() != 'all':
+            target_mun = municipality_code.strip().upper()
+            emp_mun = (emp.get("municipality_code") or "").upper()
+            emp_code = (emp.get("employee_code") or "").upper()
+            if emp_mun != target_mun and target_mun not in emp_code:
+                continue
+
         # Department filter
         if department and department.lower() != "all" and department != "All departments":
             target = department.lower().replace(" ", "_")
@@ -138,56 +128,14 @@ def create_employee(
     payload: EmployeeCreate,
     supabase: Client = Depends(get_supabase)
 ):
-    """Creates a new municipal employee."""
-    dept_info = DEPARTMENTS.get(payload.department.lower(), DEPARTMENTS['others'])
-    dept_name = payload.department_name or dept_info['name']
-    initials = payload.initials
-    if not initials:
-        parts = payload.name.split()
-        initials = "".join([p[0].upper() for p in parts if p[0].isalpha()])[:2]
-
-    new_id = str(uuid.uuid4())
-    now_str = datetime.utcnow().isoformat() + "Z"
-
-    record = {
-        "id": new_id,
-        "employee_code": payload.employee_code.upper(),
-        "name": payload.name,
-        "initials": initials,
-        "email": payload.email.lower(),
-        "phone": payload.phone,
-        "department": payload.department.lower(),
-        "department_name": dept_name,
-        "designation": payload.designation,
-        "zone": payload.zone,
-        "status": "active",
-        "assigned_count": 0,
-        "completed_count": 0,
-        "pending_count": 0,
-        "overdue_count": 0,
-        "avg_resolution_days": 2.0,
-        "completion_rate": 100.0,
-        "rating": 5.0,
-        "performance": "On track",
-        "skills": payload.skills,
-        "created_at": now_str,
-        "updated_at": now_str
-    }
-
-    # Save to local storage
-    _MEMORY_EMPLOYEES.append(record)
-    _save_stored_employees(_MEMORY_EMPLOYEES)
-
-    # Save to Supabase if available
-    if supabase is not None:
-        try:
-            res = supabase.table("employees").insert(record).execute()
-            if res.data and len(res.data) > 0:
-                return res.data[0]
-        except Exception as e:
-            print(f"Supabase employee insert note: {e}")
-
-    return record
+    """Creates a new municipal employee bound to a specific municipality."""
+    from data_manager import add_municipality_employee
+    try:
+        record = add_municipality_employee(payload.dict())
+        _MEMORY_EMPLOYEES.insert(0, record)
+        return record
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.patch("/{id_or_code}", response_model=EmployeeResponse)
 def update_employee(

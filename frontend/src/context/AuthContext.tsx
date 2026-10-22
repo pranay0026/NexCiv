@@ -31,7 +31,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signInWithGoogle: (role?: 'citizen' | 'employee', customEmail?: string, customName?: string) => Promise<void>;
-  loginAsCitizen: (email?: string, name?: string, phone?: string) => void;
+  loginAsCitizen: (email?: string, name?: string, phone?: string, municipalCorporation?: string, ward?: string, address?: string) => void;
   loginAsDepartment: (corporationId: string, corporationName?: string, departmentWing?: string) => void;
   loginAsEmployee: (employeeCode: string, name?: string, department?: string, designation?: string) => void;
   updateProfile: (data: Partial<AuthProfile>) => void;
@@ -137,14 +137,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const loginAsCitizen = (email = 'citizen@nexciv.org', name = 'Public Citizen', phone = '+91 98480 12345') => {
+  const loginAsCitizen = (
+    email?: string,
+    name?: string,
+    phone?: string,
+    municipalCorporation = 'ELR',
+    ward?: string,
+    address?: string
+  ) => {
     const token = `demo-citizen-${Date.now()}`;
     const p: AuthProfile = {
       id: `cit-${Date.now()}`,
-      email,
-      name,
+      email: email || '',
+      name: name || 'Citizen',
       phone,
       role: 'citizen',
+      municipalCorporation,
+      city: municipalCorporation,
+      ward,
+      address,
       department: 'all',
       departmentName: 'Public Citizen'
     };

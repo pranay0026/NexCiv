@@ -61,14 +61,14 @@ export default function DepartmentLoginPage() {
 
   // Corporation state
   const [corporations, setCorporations] = useState<APCorporation[]>(AP_CORPORATIONS);
-  const [selectedCorpCode, setSelectedCorpCode] = useState('GVMC');
-  const [corpPassword, setCorpPassword] = useState('admin@123');
+  const [selectedCorpCode, setSelectedCorpCode] = useState('ELR');
+  const [corpPassword, setCorpPassword] = useState('');
   const [corpVerified, setCorpVerified] = useState(false);
   const [corpError, setCorpError] = useState('');
 
   // Department Wing state
   const [selectedWing, setSelectedWing] = useState('supreme');
-  const [deptPassword, setDeptPassword] = useState('dept@123');
+  const [deptPassword, setDeptPassword] = useState('');
   const [deptError, setDeptError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -223,7 +223,7 @@ export default function DepartmentLoginPage() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Select Municipal Corporation
+                    Select Municipal Corporation / Urban Local Body
                   </label>
                   <select
                     value={selectedCorpCode}

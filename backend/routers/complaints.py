@@ -418,9 +418,14 @@ def create_complaint(
     except Exception as notif_err:
         print(f"Notification dispatch note: {notif_err}")
 
-    # 6. Save in memory and persist locally to disk
+    # 6. Save in memory and persist locally to disk & isolated municipality table
     _MEMORY_COMPLAINTS.insert(0, final_complaint)
     _save_all_local_complaints(_MEMORY_COMPLAINTS)
+    try:
+        from data_manager import save_complaint_isolated
+        save_complaint_isolated(final_complaint)
+    except Exception as e_iso:
+        print(f"Isolated table save note: {e_iso}")
 
     return final_complaint
 
@@ -501,6 +506,11 @@ def list_complaints(
         if mid not in existing_ids:
             results.append(m)
 
+    if municipal_corporation and municipal_corporation.lower() != 'all':
+        target_corp = municipal_corporation.strip().upper()
+        from data_manager import get_isolated_municipality_complaints
+        results = get_isolated_municipality_complaints(target_corp)
+
     # 3. Comprehensive Python filtering across ALL fields
     filtered = []
     for c in results:
@@ -508,7 +518,7 @@ def list_complaints(
         dept_norm = _normalize_dept_key(c.get("department_code") or c.get("department"))
         c_prio = (c.get("priority") or "").lower()
         c_stat = (c.get("status") or "").lower()
-        c_corp = (c.get("municipal_corporation") or "GVMC").upper()
+        c_corp = (c.get("municipal_corporation") or "").upper()
         c_addr = (c.get("location_address") or "").upper()
         c_emp = (c.get("assigned_employee_id") or "")
         c_email = (c.get("citizen_email") or "").lower()
@@ -584,7 +594,10 @@ def get_analytics(
 
     if municipal_corporation and municipal_corporation.lower() != 'all':
         target_mc = municipal_corporation.strip().upper()
-        all_items = [c for c in all_items if (c.get("municipal_corporation") or "GVMC").upper() == target_mc]
+        from data_manager import get_isolated_municipality_complaints
+        all_items = get_isolated_municipality_complaints(target_mc)
+        if not all_items:
+            all_items = [c for c in _MEMORY_COMPLAINTS if (c.get("municipal_corporation") or "").upper() == target_mc]
 
     total_count = len(all_items)
 
@@ -839,6 +852,11 @@ def update_complaint_status(
 
     if updated_record:
         _save_all_local_complaints(_MEMORY_COMPLAINTS)
+        try:
+            from data_manager import save_complaint_isolated
+            save_complaint_isolated(updated_record)
+        except Exception:
+            pass
 
     # Update in Supabase
     if supabase is not None:
@@ -921,6 +939,11 @@ def assign_complaint(
 
     if updated_record:
         _save_all_local_complaints(_MEMORY_COMPLAINTS)
+        try:
+            from data_manager import save_complaint_isolated
+            save_complaint_isolated(updated_record)
+        except Exception:
+            pass
 
     # Update in Supabase
     if supabase is not None:

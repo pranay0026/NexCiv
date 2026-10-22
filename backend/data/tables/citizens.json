@@ -1,0 +1,35 @@
+[
+  {
+    "id": "2a58caf5-bbc8-4a8b-95ba-e8c58331e215",
+    "name": "Ravi Teja",
+    "email": "test.citizen.eluru@gmail.com",
+    "phone": "+91 98480 12345",
+    "password_hash": "f1acef7d39e5ae7c2126ef4cf8ebd43ccfc9c0b8097f863736a1feb8779e0fd5",
+    "municipality_code": "ELR",
+    "ward": "Ward 12",
+    "address": "Opposite Collector Office, Eluru",
+    "created_at": "2026-10-22T16:32:54.093359Z"
+  },
+  {
+    "id": "1c0afc58-3519-4013-a0eb-048ce1b24ddb",
+    "name": "Pranay Sai Koppineedi",
+    "email": "pranaykoppineedi@gmail.com",
+    "phone": "+91 98480 12345",
+    "password_hash": "9b8769a4a742959a2d0298c36fb70623f2dfacda8436237df08d8dfd5b37374c",
+    "municipality_code": "ELR",
+    "ward": "Ward 12",
+    "address": "RR Peta, Near Fire Station, Eluru",
+    "created_at": "2026-10-22T16:08:09.906270Z"
+  },
+  {
+    "id": "88072b69-5c80-4929-a8bf-81c7ff22173e",
+    "name": "K. Venkat Rao",
+    "email": "venkat.rao@gmail.com",
+    "phone": "+91 94401 55678",
+    "password_hash": "9b8769a4a742959a2d0298c36fb70623f2dfacda8436237df08d8dfd5b37374c",
+    "municipality_code": "VMC",
+    "ward": "Ward 14",
+    "address": "Benz Circle, Vijayawada",
+    "created_at": "2026-10-22T16:08:09.906292Z"
+  }
+]

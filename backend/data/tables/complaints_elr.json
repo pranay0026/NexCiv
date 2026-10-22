@@ -1,0 +1,21 @@
+[
+  {
+    "id": "test-elr-complaint-001",
+    "title": "Severe road waterlogging near Fire Station, Eluru",
+    "description": "Stagnant stormwater on main road hindering traffic movement.",
+    "category": "drainage",
+    "department": "Drainage & Sewerage Department",
+    "department_code": "drainage",
+    "municipal_corporation": "ELR",
+    "ward": "Ward 4",
+    "landmark": "Near Fire Station",
+    "status": "pending",
+    "priority": "High",
+    "priority_score": 85.0,
+    "location_lat": 16.7107,
+    "location_lng": 81.0952,
+    "location_address": "[ELR] Main Road, Near Fire Station, Eluru",
+    "citizen_name": "Ravi Teja",
+    "citizen_email": "test.citizen.eluru@gmail.com"
+  }
+]

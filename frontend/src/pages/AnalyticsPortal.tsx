@@ -31,7 +31,7 @@ import {
   UserPlus,
   LogOut
 } from 'lucide-react';
-import { api, HotspotCluster, AP_CORPORATIONS } from '../lib/api';
+import { api, HotspotCluster, AP_CORPORATIONS, AP_MUNICIPALITIES } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
 interface EmployeeRecord {
@@ -48,73 +48,7 @@ interface EmployeeRecord {
   performance: 'On track' | 'Needs review' | 'Attention needed';
 }
 
-const INITIAL_EMPLOYEES: EmployeeRecord[] = [
-  {
-    id: 'EMP-1',
-    name: 'A. Kumar',
-    initials: 'AK',
-    department: 'Roads',
-    assigned: 42,
-    completed: 31,
-    pending: 11,
-    overdue: 3,
-    avgResolution: '2.8 days',
-    completionRate: 74,
-    performance: 'Needs review'
-  },
-  {
-    id: 'EMP-2',
-    name: 'S. Devi',
-    initials: 'SD',
-    department: 'Drainage',
-    assigned: 37,
-    completed: 29,
-    pending: 8,
-    overdue: 1,
-    avgResolution: '2.4 days',
-    completionRate: 78,
-    performance: 'On track'
-  },
-  {
-    id: 'EMP-3',
-    name: 'R. Prasad',
-    initials: 'RP',
-    department: 'Street Lights',
-    assigned: 34,
-    completed: 28,
-    pending: 6,
-    overdue: 0,
-    avgResolution: '2.1 days',
-    completionRate: 82,
-    performance: 'On track'
-  },
-  {
-    id: 'EMP-4',
-    name: 'M. Farah',
-    initials: 'MF',
-    department: 'Water Supply',
-    assigned: 39,
-    completed: 25,
-    pending: 14,
-    overdue: 4,
-    avgResolution: '3.6 days',
-    completionRate: 64,
-    performance: 'Attention needed'
-  },
-  {
-    id: 'EMP-5',
-    name: 'K. Rao',
-    initials: 'KR',
-    department: 'Roads',
-    assigned: 28,
-    completed: 24,
-    pending: 4,
-    overdue: 0,
-    avgResolution: '1.9 days',
-    completionRate: 86,
-    performance: 'On track'
-  }
-];
+const INITIAL_EMPLOYEES: EmployeeRecord[] = [];
 
 interface WorkItem {
   id: string;
@@ -126,44 +60,7 @@ interface WorkItem {
   status: 'Awaiting assignment' | 'Under review' | 'In progress' | 'Resolved';
 }
 
-const INITIAL_WORK_QUEUE: WorkItem[] = [
-  {
-    id: '1',
-    title: 'Road damage',
-    code: 'NXC-1042',
-    location: 'Oak Street',
-    assignedTo: 'Unassigned',
-    timeAgo: '2 hours ago',
-    status: 'Awaiting assignment'
-  },
-  {
-    id: '2',
-    title: 'Drain blockage',
-    code: 'NXC-1041',
-    location: 'Lake Road',
-    assignedTo: 'S. Devi',
-    timeAgo: '5 hours ago',
-    status: 'Under review'
-  },
-  {
-    id: '3',
-    title: 'Street light outage',
-    code: 'NXC-1040',
-    location: 'Market Area',
-    assignedTo: 'R. Prasad',
-    timeAgo: 'Yesterday',
-    status: 'In progress'
-  },
-  {
-    id: '4',
-    title: 'Low water supply',
-    code: 'NXC-1039',
-    location: 'Hill Colony',
-    assignedTo: 'M. Farah',
-    timeAgo: 'Yesterday',
-    status: 'Resolved'
-  }
-];
+const INITIAL_WORK_QUEUE: WorkItem[] = [];
 
 export default function AnalyticsPortal() {
   const { profile, signOut } = useAuth();
@@ -261,9 +158,10 @@ export default function AnalyticsPortal() {
     }
   }, [assignModalOpen, assignableItems]);
 
-  // 1. Fetch live employees from backend API
+  // 1. Fetch live employees from backend API (strictly scoped to selected municipality)
   useEffect(() => {
-    api.getEmployees()
+    const corpFilter = selectedCorp && selectedCorp !== 'All' ? selectedCorp : (profile?.role === 'department' ? profile.departmentCode : undefined);
+    api.getEmployees({ municipality_code: corpFilter })
       .then((data: any[]) => {
         if (data && data.length > 0) {
           const mapped: EmployeeRecord[] = data.map((e: any) => ({
@@ -271,24 +169,29 @@ export default function AnalyticsPortal() {
             name: e.name,
             initials: e.initials || e.name.slice(0, 2).toUpperCase(),
             department: (e.department || 'Roads').replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
-            assigned: e.assigned_count ?? 30,
-            completed: e.completed_count ?? 25,
-            pending: e.pending_count ?? 5,
+            assigned: e.assigned_count ?? 0,
+            completed: e.completed_count ?? 0,
+            pending: e.pending_count ?? 0,
             overdue: e.overdue_count ?? 0,
-            avgResolution: e.avg_resolution_days ? `${e.avg_resolution_days} days` : '2.1 days',
-            completionRate: e.completion_rate ? Math.round(e.completion_rate) : 80,
-            performance: (e.performance as any) || (e.completion_rate >= 78 ? 'On track' : 'Needs review')
+            avgResolution: e.avg_resolution_days ? `${e.avg_resolution_days} days` : '0 days',
+            completionRate: e.completion_rate ? Math.round(e.completion_rate) : 100,
+            performance: (e.performance as any) || 'On track'
           }));
           setEmployeesList(mapped);
           if (mapped[0]) setAssignTargetEmp(mapped[0].id);
+        } else {
+          setEmployeesList([]);
         }
       })
-      .catch((err) => console.warn('Employee live fetch note:', err));
-  }, []);
+      .catch((err) => {
+        console.warn('Employee live fetch note:', err);
+        setEmployeesList([]);
+      });
+  }, [selectedCorp, profile]);
 
   // 2. Fetch live complaints work queue & analytics
   const fetchLiveWorkQueue = () => {
-    const corpFilter = selectedCorp && selectedCorp !== 'All' ? selectedCorp : undefined;
+    const corpFilter = selectedCorp && selectedCorp !== 'All' ? selectedCorp : (profile?.role === 'department' ? profile.departmentCode : undefined);
     const deptFilter = selectedDept && selectedDept !== 'All departments' ? selectedDept : undefined;
     const statusFilter = selectedStatus && selectedStatus !== 'All statuses' ? selectedStatus : undefined;
 
@@ -318,24 +221,13 @@ export default function AnalyticsPortal() {
             setAssignCaseId(mappedQueue[0].id);
           }
         } else {
-          // If filtered list is empty, show all active items so queue is never dead
-          api.getComplaints().then((all) => {
-            if (all && all.length > 0) {
-              const fallbackMapped: WorkItem[] = all.slice(0, 15).map((c: any) => ({
-                id: c.id,
-                title: c.title,
-                code: c.id.length > 8 ? `NXC-${c.id.slice(0, 6).toUpperCase()}` : c.id,
-                location: c.landmark || c.location_address || 'Andhra Pradesh',
-                assignedTo: c.assigned_employee_id || c.assigned_team || 'Awaiting assignment',
-                timeAgo: 'Live',
-                status: (c.status === 'pending' ? 'Awaiting assignment' : c.status === 'in_progress' ? 'In progress' : 'Resolved') as any
-              }));
-              setWorkQueue(fallbackMapped);
-            }
-          }).catch(() => {});
+          setWorkQueue([]);
         }
       })
-      .catch((err) => console.warn('Complaints work queue fetch note:', err));
+      .catch((err) => {
+        console.warn('Complaints work queue fetch note:', err);
+        setWorkQueue([]);
+      });
 
     api.getAnalytics(corpFilter)
       .then((res: any) => {
@@ -352,7 +244,21 @@ export default function AnalyticsPortal() {
       window.removeEventListener('nexciv_complaints_updated', fetchLiveWorkQueue);
       clearInterval(interval);
     };
-  }, [selectedCorp, selectedDept, selectedStatus]);
+  }, [selectedCorp, selectedDept, selectedStatus, profile]);
+
+  // Dynamic accurate metric computations from active municipality queue
+  const computedTotal = workQueue.length;
+  const computedAwaiting = workQueue.filter((w) => w.status === 'Awaiting assignment').length;
+  const computedInProgress = workQueue.filter((w) => w.status === 'In progress' || w.status === 'Under review').length;
+  const computedResolved = workQueue.filter((w) => w.status === 'Resolved').length;
+  const computedRate = computedTotal > 0 ? Math.round((computedResolved / computedTotal) * 100) : 0;
+
+  const displayTotal = analyticsData?.total_complaints !== undefined ? analyticsData.total_complaints : computedTotal;
+  const displayAwaiting = analyticsData?.awaiting_assignment !== undefined ? analyticsData.awaiting_assignment : computedAwaiting;
+  const displayInProgress = analyticsData?.in_progress !== undefined ? analyticsData.in_progress : computedInProgress;
+  const displayOverdue = analyticsData?.overdue_cases !== undefined ? analyticsData.overdue_cases : 0;
+  const displayResolved = analyticsData?.resolved !== undefined ? analyticsData.resolved : computedResolved;
+  const displayRate = analyticsData?.overall_resolution_rate !== undefined ? `${analyticsData.overall_resolution_rate}%` : `${computedRate}%`;
 
   useEffect(() => {
     setLoadingHotspots(true);
@@ -497,7 +403,8 @@ export default function AnalyticsPortal() {
     setRegisterError('');
     setRegisterSuccess('');
 
-    const code = newEmpCode.trim().toUpperCase() || `EMP-${100 + employeesList.length + 1}`;
+    const activeMunicipality = selectedCorp && selectedCorp !== 'All' ? selectedCorp : (profile?.departmentCode || 'ELR');
+    const code = newEmpCode.trim().toUpperCase() || `${activeMunicipality}-EMP-${100 + employeesList.length + 1}`;
 
     const wingNames: Record<string, string> = {
       road: 'Roads & Buildings Department',
@@ -517,7 +424,9 @@ export default function AnalyticsPortal() {
         designation: newEmpDesignation,
         zone: newEmpZone,
         phone: newEmpPhone,
-        skills: newEmpSkills
+        skills: newEmpSkills,
+        municipality_code: activeMunicipality,
+        password: newEmpPassword || 'emp@123'
       });
 
       const parts = newEmpName.trim().split(' ');
@@ -739,7 +648,7 @@ export default function AnalyticsPortal() {
               </p>
             </div>
 
-            {/* Action Buttons: Export Report + Assign Work */}
+            {/* Action Buttons: Export Report + Add Employee + Assign Work */}
             <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto">
               <button
                 type="button"
@@ -752,8 +661,21 @@ export default function AnalyticsPortal() {
 
               <button
                 type="button"
+                onClick={() => {
+                  const defaultPrefix = selectedCorp && selectedCorp !== 'All' ? selectedCorp : (profile?.departmentCode || 'ELR');
+                  setNewEmpCode(`${defaultPrefix}-EMP-${100 + employeesList.length + 1}`);
+                  setRegisterEmpModalOpen(true);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+              >
+                <UserPlus size={15} />
+                <span>+ Add Employee</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setAssignModalOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0d9488] hover:bg-[#0f766e] text-white text-xs font-bold shadow-xs transition"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0d9488] hover:bg-[#0f766e] text-white text-xs font-bold shadow-xs transition cursor-pointer"
               >
                 <Plus size={15} />
                 <span>Assign work</span>
@@ -810,17 +732,17 @@ export default function AnalyticsPortal() {
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-bold text-teal-800 flex items-center gap-1">
                 <Building2 size={12} className="text-teal-600" />
-                Municipal Corporation
+                Municipal Corporation / City
               </label>
               <select
                 value={selectedCorp}
                 onChange={(e) => setSelectedCorp(e.target.value)}
-                className="px-3 py-1.5 bg-teal-50/60 border border-teal-200 rounded-lg font-bold text-teal-900 focus:outline-none focus:border-teal-500 min-w-[170px]"
+                className="px-3 py-1.5 bg-teal-50/60 border border-teal-200 rounded-lg font-bold text-teal-900 focus:outline-none focus:border-teal-500 min-w-[200px]"
               >
-                <option value="All">All 17 AP Corporations</option>
-                {AP_CORPORATIONS.map((corp) => (
+                <option value="All">All AP Municipalities & Cities ({AP_MUNICIPALITIES.length})</option>
+                {AP_MUNICIPALITIES.map((corp) => (
                   <option key={corp.code} value={corp.code}>
-                    {corp.code} &middot; {corp.name}
+                    {corp.code} &middot; {corp.name} ({corp.district})
                   </option>
                 ))}
               </select>
@@ -915,7 +837,7 @@ export default function AnalyticsPortal() {
               </div>
               <div className="mt-4">
                 <div className="text-3xl font-black text-slate-900 tracking-tight">
-                  {analyticsData?.total_complaints !== undefined ? analyticsData.total_complaints.toLocaleString() : '1,284'}
+                  {displayTotal.toLocaleString()}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-1">Live municipal system tally</div>
               </div>
@@ -931,7 +853,7 @@ export default function AnalyticsPortal() {
               </div>
               <div className="mt-4">
                 <div className="text-3xl font-black text-slate-900 tracking-tight">
-                  {analyticsData?.awaiting_assignment !== undefined ? analyticsData.awaiting_assignment : '46'}
+                  {displayAwaiting}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-1">Pending dispatch & crew routing</div>
               </div>
@@ -947,7 +869,7 @@ export default function AnalyticsPortal() {
               </div>
               <div className="mt-4">
                 <div className="text-3xl font-black text-slate-900 tracking-tight">
-                  {analyticsData?.in_progress !== undefined ? analyticsData.in_progress : '312'}
+                  {displayInProgress}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-1">Field crew on-site action</div>
               </div>
@@ -962,12 +884,12 @@ export default function AnalyticsPortal() {
                 </div>
               </div>
               <div className="mt-4">
-                <div className="text-3xl font-black text-slate-900 tracking-tight">27</div>
+                <div className="text-3xl font-black text-slate-900 tracking-tight">{displayOverdue}</div>
                 <div className="text-[11px] text-slate-400 mt-1">Attention suggested</div>
               </div>
             </div>
 
-            {/* Card 5: Resolved this month */}
+            {/* Card 5: Resolved cases */}
             <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs flex flex-col justify-between">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-600">Resolved cases</span>
@@ -977,13 +899,13 @@ export default function AnalyticsPortal() {
               </div>
               <div className="mt-4">
                 <div className="text-3xl font-black text-slate-900 tracking-tight">
-                  {analyticsData?.resolved !== undefined ? analyticsData.resolved : '806'}
+                  {displayResolved}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-1">Successfully closed grievances</div>
               </div>
             </div>
 
-            {/* Card 6: On-time resolution */}
+            {/* Card 6: Resolution rate */}
             <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs flex flex-col justify-between">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-600">Resolution rate</span>
@@ -993,7 +915,7 @@ export default function AnalyticsPortal() {
               </div>
               <div className="mt-4">
                 <div className="text-3xl font-black text-slate-900 tracking-tight">
-                  {analyticsData?.overall_resolution_rate !== undefined ? `${analyticsData.overall_resolution_rate}%` : '88%'}
+                  {displayRate}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-1">SLA compliance score</div>
               </div>
@@ -1437,7 +1359,8 @@ export default function AnalyticsPortal() {
                 <button
                   type="button"
                   onClick={() => {
-                    setNewEmpCode(`EMP-${100 + employeesList.length + 1}`);
+                    const defaultPrefix = selectedCorp && selectedCorp !== 'All' ? selectedCorp : (profile?.departmentCode || 'ELR');
+                    setNewEmpCode(`${defaultPrefix}-EMP-${100 + employeesList.length + 1}`);
                     setRegisterEmpModalOpen(true);
                   }}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition shadow-xs cursor-pointer"
@@ -1718,7 +1641,7 @@ export default function AnalyticsPortal() {
                     <p className="text-xs text-slate-500 mt-0.5">Individual assigned/completed/overdue history</p>
                     <button
                       type="button"
-                      onClick={() => setSelectedEmployeeReport(INITIAL_EMPLOYEES[0])}
+                      onClick={() => employeesList[0] && setSelectedEmployeeReport(employeesList[0])}
                       className="inline-flex items-center gap-1 text-xs font-bold text-teal-700 hover:text-teal-800 mt-3"
                     >
                       <span>Open report</span>

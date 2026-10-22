@@ -1,0 +1,785 @@
+[
+  {
+    "code": "GVMC",
+    "name": "Greater Visakhapatnam Municipal Corporation",
+    "short_name": "Visakhapatnam",
+    "type": "Corporation",
+    "district": "Visakhapatnam",
+    "wards_count": 98,
+    "population": "23.5 Lakhs"
+  },
+  {
+    "code": "VMC",
+    "name": "Vijayawada Municipal Corporation",
+    "short_name": "Vijayawada",
+    "type": "Corporation",
+    "district": "NTR",
+    "wards_count": 64,
+    "population": "14.8 Lakhs"
+  },
+  {
+    "code": "GMC",
+    "name": "Guntur Municipal Corporation",
+    "short_name": "Guntur",
+    "type": "Corporation",
+    "district": "Guntur",
+    "wards_count": 57,
+    "population": "10.2 Lakhs"
+  },
+  {
+    "code": "TMC",
+    "name": "Tirupati Municipal Corporation",
+    "short_name": "Tirupati",
+    "type": "Corporation",
+    "district": "Tirupati",
+    "wards_count": 50,
+    "population": "6.8 Lakhs"
+  },
+  {
+    "code": "KMC",
+    "name": "Kurnool Municipal Corporation",
+    "short_name": "Kurnool",
+    "type": "Corporation",
+    "district": "Kurnool",
+    "wards_count": 52,
+    "population": "7.5 Lakhs"
+  },
+  {
+    "code": "RMC",
+    "name": "Rajamahendravaram Municipal Corporation",
+    "short_name": "Rajahmundry",
+    "type": "Corporation",
+    "district": "East Godavari",
+    "wards_count": 50,
+    "population": "5.6 Lakhs"
+  },
+  {
+    "code": "NMC",
+    "name": "Nellore Municipal Corporation",
+    "short_name": "Nellore",
+    "type": "Corporation",
+    "district": "SPSR Nellore",
+    "wards_count": 54,
+    "population": "6.5 Lakhs"
+  },
+  {
+    "code": "KADA",
+    "name": "Kadapa Municipal Corporation",
+    "short_name": "Kadapa",
+    "type": "Corporation",
+    "district": "YSR Kadapa",
+    "wards_count": 50,
+    "population": "4.8 Lakhs"
+  },
+  {
+    "code": "KKD",
+    "name": "Kakinada Municipal Corporation",
+    "short_name": "Kakinada",
+    "type": "Corporation",
+    "district": "Kakinada",
+    "wards_count": 50,
+    "population": "5.2 Lakhs"
+  },
+  {
+    "code": "ELR",
+    "name": "Eluru Municipal Corporation",
+    "short_name": "Eluru",
+    "type": "Corporation",
+    "district": "Eluru",
+    "wards_count": 50,
+    "population": "4.1 Lakhs"
+  },
+  {
+    "code": "ATP",
+    "name": "Anantapur Municipal Corporation",
+    "short_name": "Anantapur",
+    "type": "Corporation",
+    "district": "Anantapur",
+    "wards_count": 50,
+    "population": "4.5 Lakhs"
+  },
+  {
+    "code": "VZM",
+    "name": "Vizianagaram Municipal Corporation",
+    "short_name": "Vizianagaram",
+    "type": "Corporation",
+    "district": "Vizianagaram",
+    "wards_count": 50,
+    "population": "3.8 Lakhs"
+  },
+  {
+    "code": "ONG",
+    "name": "Ongole Municipal Corporation",
+    "short_name": "Ongole",
+    "type": "Corporation",
+    "district": "Prakasam",
+    "wards_count": 50,
+    "population": "3.2 Lakhs"
+  },
+  {
+    "code": "NDL",
+    "name": "Nandyal Municipal Corporation",
+    "short_name": "Nandyal",
+    "type": "Corporation",
+    "district": "Nandyal",
+    "wards_count": 42,
+    "population": "2.9 Lakhs"
+  },
+  {
+    "code": "MCT",
+    "name": "Machilipatnam Municipal Corporation",
+    "short_name": "Machilipatnam",
+    "type": "Corporation",
+    "district": "Krishna",
+    "wards_count": 50,
+    "population": "2.8 Lakhs"
+  },
+  {
+    "code": "CTR",
+    "name": "Chittoor Municipal Corporation",
+    "short_name": "Chittoor",
+    "type": "Corporation",
+    "district": "Chittoor",
+    "wards_count": 50,
+    "population": "2.6 Lakhs"
+  },
+  {
+    "code": "SKLM",
+    "name": "Srikakulam Municipal Corporation",
+    "short_name": "Srikakulam",
+    "type": "Corporation",
+    "district": "Srikakulam",
+    "wards_count": 50,
+    "population": "2.5 Lakhs"
+  },
+  {
+    "code": "BVM",
+    "name": "Bhimavaram Municipality",
+    "short_name": "Bhimavaram",
+    "type": "Municipality",
+    "district": "West Godavari",
+    "wards_count": 39,
+    "population": "2.1 Lakhs"
+  },
+  {
+    "code": "TPG",
+    "name": "Tadepalligudem Municipality",
+    "short_name": "Tadepalligudem",
+    "type": "Municipality",
+    "district": "West Godavari",
+    "wards_count": 35,
+    "population": "1.8 Lakhs"
+  },
+  {
+    "code": "TNK",
+    "name": "Tanuku Municipality",
+    "short_name": "Tanuku",
+    "type": "Municipality",
+    "district": "West Godavari",
+    "wards_count": 34,
+    "population": "1.5 Lakhs"
+  },
+  {
+    "code": "PLK",
+    "name": "Palakollu Municipality",
+    "short_name": "Palakollu",
+    "type": "Municipality",
+    "district": "West Godavari",
+    "wards_count": 31,
+    "population": "1.2 Lakhs"
+  },
+  {
+    "code": "NSP",
+    "name": "Narasapuram Municipality",
+    "short_name": "Narasapuram",
+    "type": "Municipality",
+    "district": "West Godavari",
+    "wards_count": 31,
+    "population": "1.1 Lakhs"
+  },
+  {
+    "code": "JRG",
+    "name": "Jangareddygudem Municipality",
+    "short_name": "Jangareddygudem",
+    "type": "Municipality",
+    "district": "Eluru",
+    "wards_count": 28,
+    "population": "85,000"
+  },
+  {
+    "code": "KVR",
+    "name": "Kovvur Municipality",
+    "short_name": "Kovvur",
+    "type": "Municipality",
+    "district": "East Godavari",
+    "wards_count": 23,
+    "population": "65,000"
+  },
+  {
+    "code": "NDV",
+    "name": "Nidadavole Municipality",
+    "short_name": "Nidadavole",
+    "type": "Municipality",
+    "district": "East Godavari",
+    "wards_count": 28,
+    "population": "75,000"
+  },
+  {
+    "code": "GDV",
+    "name": "Gudivada Municipality",
+    "short_name": "Gudivada",
+    "type": "Municipality",
+    "district": "Krishna",
+    "wards_count": 36,
+    "population": "1.6 Lakhs"
+  },
+  {
+    "code": "NZD",
+    "name": "Nuzvid Municipality",
+    "short_name": "Nuzvid",
+    "type": "Municipality",
+    "district": "Eluru",
+    "wards_count": 32,
+    "population": "1.1 Lakhs"
+  },
+  {
+    "code": "JPT",
+    "name": "Jaggaiahpeta Municipality",
+    "short_name": "Jaggaiahpeta",
+    "type": "Municipality",
+    "district": "NTR",
+    "wards_count": 31,
+    "population": "90,000"
+  },
+  {
+    "code": "KDP",
+    "name": "Kondapalli Municipality",
+    "short_name": "Kondapalli",
+    "type": "Municipality",
+    "district": "NTR",
+    "wards_count": 29,
+    "population": "78,000"
+  },
+  {
+    "code": "NDG",
+    "name": "Nandigama Municipality",
+    "short_name": "Nandigama",
+    "type": "Municipality",
+    "district": "NTR",
+    "wards_count": 20,
+    "population": "60,000"
+  },
+  {
+    "code": "VYR",
+    "name": "Vuyyuru Municipality",
+    "short_name": "Vuyyuru",
+    "type": "Municipality",
+    "district": "Krishna",
+    "wards_count": 20,
+    "population": "55,000"
+  },
+  {
+    "code": "TRV",
+    "name": "Tiruvuru Municipality",
+    "short_name": "Tiruvuru",
+    "type": "Municipality",
+    "district": "NTR",
+    "wards_count": 20,
+    "population": "50,000"
+  },
+  {
+    "code": "TNL",
+    "name": "Tenali Municipality",
+    "short_name": "Tenali",
+    "type": "Municipality",
+    "district": "Guntur",
+    "wards_count": 40,
+    "population": "2.2 Lakhs"
+  },
+  {
+    "code": "MTMC",
+    "name": "Mangalagiri-Tadepalli Municipal Corporation",
+    "short_name": "Mangalagiri",
+    "type": "Corporation",
+    "district": "Guntur",
+    "wards_count": 50,
+    "population": "3.5 Lakhs"
+  },
+  {
+    "code": "NRP",
+    "name": "Narasaraopet Municipality",
+    "short_name": "Narasaraopet",
+    "type": "Municipality",
+    "district": "Palnadu",
+    "wards_count": 34,
+    "population": "1.7 Lakhs"
+  },
+  {
+    "code": "CKP",
+    "name": "Chilakaluripet Municipality",
+    "short_name": "Chilakaluripet",
+    "type": "Municipality",
+    "district": "Palnadu",
+    "wards_count": 38,
+    "population": "1.4 Lakhs"
+  },
+  {
+    "code": "STP",
+    "name": "Sattenapalle Municipality",
+    "short_name": "Sattenapalle",
+    "type": "Municipality",
+    "district": "Palnadu",
+    "wards_count": 31,
+    "population": "95,000"
+  },
+  {
+    "code": "VNK",
+    "name": "Vinukonda Municipality",
+    "short_name": "Vinukonda",
+    "type": "Municipality",
+    "district": "Palnadu",
+    "wards_count": 32,
+    "population": "80,000"
+  },
+  {
+    "code": "PGR",
+    "name": "Piduguralla Municipality",
+    "short_name": "Piduguralla",
+    "type": "Municipality",
+    "district": "Palnadu",
+    "wards_count": 33,
+    "population": "90,000"
+  },
+  {
+    "code": "BPT",
+    "name": "Bapatla Municipality",
+    "short_name": "Bapatla",
+    "type": "Municipality",
+    "district": "Bapatla",
+    "wards_count": 34,
+    "population": "1.1 Lakhs"
+  },
+  {
+    "code": "CRL",
+    "name": "Chirala Municipality",
+    "short_name": "Chirala",
+    "type": "Municipality",
+    "district": "Bapatla",
+    "wards_count": 33,
+    "population": "1.3 Lakhs"
+  },
+  {
+    "code": "RPL",
+    "name": "Repalle Municipality",
+    "short_name": "Repalle",
+    "type": "Municipality",
+    "district": "Bapatla",
+    "wards_count": 28,
+    "population": "70,000"
+  },
+  {
+    "code": "PNR",
+    "name": "Ponnur Municipality",
+    "short_name": "Ponnur",
+    "type": "Municipality",
+    "district": "Guntur",
+    "wards_count": 31,
+    "population": "85,000"
+  },
+  {
+    "code": "AMP",
+    "name": "Amalapuram Municipality",
+    "short_name": "Amalapuram",
+    "type": "Municipality",
+    "district": "Dr. B.R. Ambedkar Konaseema",
+    "wards_count": 30,
+    "population": "1.0 Lakhs"
+  },
+  {
+    "code": "MDP",
+    "name": "Mandapeta Municipality",
+    "short_name": "Mandapeta",
+    "type": "Municipality",
+    "district": "Dr. B.R. Ambedkar Konaseema",
+    "wards_count": 30,
+    "population": "95,000"
+  },
+  {
+    "code": "RCP",
+    "name": "Ramachandrapuram Municipality",
+    "short_name": "Ramachandrapuram",
+    "type": "Municipality",
+    "district": "Dr. B.R. Ambedkar Konaseema",
+    "wards_count": 28,
+    "population": "85,000"
+  },
+  {
+    "code": "SMK",
+    "name": "Samalkota Municipality",
+    "short_name": "Samalkota",
+    "type": "Municipality",
+    "district": "Kakinada",
+    "wards_count": 31,
+    "population": "90,000"
+  },
+  {
+    "code": "PTP",
+    "name": "Pithapuram Municipality",
+    "short_name": "Pithapuram",
+    "type": "Municipality",
+    "district": "Kakinada",
+    "wards_count": 30,
+    "population": "80,000"
+  },
+  {
+    "code": "PDP",
+    "name": "Peddapuram Municipality",
+    "short_name": "Peddapuram",
+    "type": "Municipality",
+    "district": "Kakinada",
+    "wards_count": 29,
+    "population": "75,000"
+  },
+  {
+    "code": "TUN",
+    "name": "Tuni Municipality",
+    "short_name": "Tuni",
+    "type": "Municipality",
+    "district": "Kakinada",
+    "wards_count": 30,
+    "population": "85,000"
+  },
+  {
+    "code": "MKP",
+    "name": "Markapur Municipality",
+    "short_name": "Markapur",
+    "type": "Municipality",
+    "district": "Prakasam",
+    "wards_count": 35,
+    "population": "1.1 Lakhs"
+  },
+  {
+    "code": "KND",
+    "name": "Kandukur Municipality",
+    "short_name": "Kandukur",
+    "type": "Municipality",
+    "district": "SPSR Nellore",
+    "wards_count": 33,
+    "population": "95,000"
+  },
+  {
+    "code": "KVL",
+    "name": "Kavali Municipality",
+    "short_name": "Kavali",
+    "type": "Municipality",
+    "district": "SPSR Nellore",
+    "wards_count": 40,
+    "population": "1.5 Lakhs"
+  },
+  {
+    "code": "GDR",
+    "name": "Gudur Municipality",
+    "short_name": "Gudur",
+    "type": "Municipality",
+    "district": "Tirupati",
+    "wards_count": 33,
+    "population": "1.0 Lakhs"
+  },
+  {
+    "code": "SLP",
+    "name": "Sullurpeta Municipality",
+    "short_name": "Sullurpeta",
+    "type": "Municipality",
+    "district": "Tirupati",
+    "wards_count": 25,
+    "population": "65,000"
+  },
+  {
+    "code": "VKG",
+    "name": "Venkatagiri Municipality",
+    "short_name": "Venkatagiri",
+    "type": "Municipality",
+    "district": "Tirupati",
+    "wards_count": 25,
+    "population": "60,000"
+  },
+  {
+    "code": "SKH",
+    "name": "Srikalahasti Municipality",
+    "short_name": "Srikalahasti",
+    "type": "Municipality",
+    "district": "Tirupati",
+    "wards_count": 33,
+    "population": "1.2 Lakhs"
+  },
+  {
+    "code": "NGR",
+    "name": "Nagari Municipality",
+    "short_name": "Nagari",
+    "type": "Municipality",
+    "district": "Chittoor",
+    "wards_count": 29,
+    "population": "75,000"
+  },
+  {
+    "code": "PTR",
+    "name": "Puttur Municipality",
+    "short_name": "Puttur",
+    "type": "Municipality",
+    "district": "Tirupati",
+    "wards_count": 29,
+    "population": "70,000"
+  },
+  {
+    "code": "MPL",
+    "name": "Madanapalle Municipality",
+    "short_name": "Madanapalle",
+    "type": "Municipality",
+    "district": "Annamayya",
+    "wards_count": 35,
+    "population": "2.0 Lakhs"
+  },
+  {
+    "code": "PNG",
+    "name": "Punganur Municipality",
+    "short_name": "Punganur",
+    "type": "Municipality",
+    "district": "Chittoor",
+    "wards_count": 31,
+    "population": "85,000"
+  },
+  {
+    "code": "PLM",
+    "name": "Palamaner Municipality",
+    "short_name": "Palamaner",
+    "type": "Municipality",
+    "district": "Chittoor",
+    "wards_count": 26,
+    "population": "70,000"
+  },
+  {
+    "code": "RYC",
+    "name": "Rayachoti Municipality",
+    "short_name": "Rayachoti",
+    "type": "Municipality",
+    "district": "Annamayya",
+    "wards_count": 34,
+    "population": "1.4 Lakhs"
+  },
+  {
+    "code": "ADN",
+    "name": "Adoni Municipality",
+    "short_name": "Adoni",
+    "type": "Municipality",
+    "district": "Kurnool",
+    "wards_count": 42,
+    "population": "2.3 Lakhs"
+  },
+  {
+    "code": "YMG",
+    "name": "Yemmiganur Municipality",
+    "short_name": "Yemmiganur",
+    "type": "Municipality",
+    "district": "Kurnool",
+    "wards_count": 34,
+    "population": "1.3 Lakhs"
+  },
+  {
+    "code": "DHN",
+    "name": "Dhone Municipality",
+    "short_name": "Dhone",
+    "type": "Municipality",
+    "district": "Nandyal",
+    "wards_count": 32,
+    "population": "80,000"
+  },
+  {
+    "code": "NDK",
+    "name": "Nandikotkur Municipality",
+    "short_name": "Nandikotkur",
+    "type": "Municipality",
+    "district": "Nandyal",
+    "wards_count": 29,
+    "population": "65,000"
+  },
+  {
+    "code": "ATK",
+    "name": "Atmakur Municipality",
+    "short_name": "Atmakur",
+    "type": "Municipality",
+    "district": "Nandyal",
+    "wards_count": 24,
+    "population": "60,000"
+  },
+  {
+    "code": "ALG",
+    "name": "Allagadda Municipality",
+    "short_name": "Allagadda",
+    "type": "Municipality",
+    "district": "Nandyal",
+    "wards_count": 20,
+    "population": "50,000"
+  },
+  {
+    "code": "HDP",
+    "name": "Hindupur Municipality",
+    "short_name": "Hindupur",
+    "type": "Municipality",
+    "district": "Sri Sathya Sai",
+    "wards_count": 38,
+    "population": "2.1 Lakhs"
+  },
+  {
+    "code": "GTK",
+    "name": "Guntakal Municipality",
+    "short_name": "Guntakal",
+    "type": "Municipality",
+    "district": "Anantapur",
+    "wards_count": 37,
+    "population": "1.5 Lakhs"
+  },
+  {
+    "code": "DHM",
+    "name": "Dharmavaram Municipality",
+    "short_name": "Dharmavaram",
+    "type": "Municipality",
+    "district": "Sri Sathya Sai",
+    "wards_count": 40,
+    "population": "1.6 Lakhs"
+  },
+  {
+    "code": "TDP",
+    "name": "Tadipatri Municipality",
+    "short_name": "Tadipatri",
+    "type": "Municipality",
+    "district": "Anantapur",
+    "wards_count": 36,
+    "population": "1.3 Lakhs"
+  },
+  {
+    "code": "KDR",
+    "name": "Kadiri Municipality",
+    "short_name": "Kadiri",
+    "type": "Municipality",
+    "district": "Sri Sathya Sai",
+    "wards_count": 36,
+    "population": "1.1 Lakhs"
+  },
+  {
+    "code": "RYD",
+    "name": "Rayadurg Municipality",
+    "short_name": "Rayadurg",
+    "type": "Municipality",
+    "district": "Anantapur",
+    "wards_count": 32,
+    "population": "85,000"
+  },
+  {
+    "code": "PTPT",
+    "name": "Puttaparthi Municipality",
+    "short_name": "Puttaparthi",
+    "type": "Municipality",
+    "district": "Sri Sathya Sai",
+    "wards_count": 20,
+    "population": "45,000"
+  },
+  {
+    "code": "PDT",
+    "name": "Proddatur Municipality",
+    "short_name": "Proddatur",
+    "type": "Municipality",
+    "district": "YSR Kadapa",
+    "wards_count": 41,
+    "population": "2.4 Lakhs"
+  },
+  {
+    "code": "JMD",
+    "name": "Jammalamadugu Municipality",
+    "short_name": "Jammalamadugu",
+    "type": "Municipality",
+    "district": "YSR Kadapa",
+    "wards_count": 20,
+    "population": "60,000"
+  },
+  {
+    "code": "BDV",
+    "name": "Badvel Municipality",
+    "short_name": "Badvel",
+    "type": "Municipality",
+    "district": "YSR Kadapa",
+    "wards_count": 35,
+    "population": "90,000"
+  },
+  {
+    "code": "PLV",
+    "name": "Pulivendula Municipality",
+    "short_name": "Pulivendula",
+    "type": "Municipality",
+    "district": "YSR Kadapa",
+    "wards_count": 33,
+    "population": "85,000"
+  },
+  {
+    "code": "BBL",
+    "name": "Bobbili Municipality",
+    "short_name": "Bobbili",
+    "type": "Municipality",
+    "district": "Vizianagaram",
+    "wards_count": 31,
+    "population": "80,000"
+  },
+  {
+    "code": "SLR",
+    "name": "Salur Municipality",
+    "short_name": "Salur",
+    "type": "Municipality",
+    "district": "Parvathipuram Manyam",
+    "wards_count": 29,
+    "population": "70,000"
+  },
+  {
+    "code": "PVP",
+    "name": "Parvathipuram Municipality",
+    "short_name": "Parvathipuram",
+    "type": "Municipality",
+    "district": "Parvathipuram Manyam",
+    "wards_count": 30,
+    "population": "75,000"
+  },
+  {
+    "code": "RJM",
+    "name": "Rajam Municipality",
+    "short_name": "Rajam",
+    "type": "Municipality",
+    "district": "Vizianagaram",
+    "wards_count": 20,
+    "population": "50,000"
+  },
+  {
+    "code": "PLS",
+    "name": "Palasa-Kasibugga Municipality",
+    "short_name": "Palasa",
+    "type": "Municipality",
+    "district": "Srikakulam",
+    "wards_count": 31,
+    "population": "80,000"
+  },
+  {
+    "code": "AMV",
+    "name": "Amadalavalasa Municipality",
+    "short_name": "Amadalavalasa",
+    "type": "Municipality",
+    "district": "Srikakulam",
+    "wards_count": 23,
+    "population": "55,000"
+  },
+  {
+    "code": "ICP",
+    "name": "Ichchapuram Municipality",
+    "short_name": "Ichchapuram",
+    "type": "Municipality",
+    "district": "Srikakulam",
+    "wards_count": 23,
+    "population": "50,000"
+  }
+]

@@ -24,7 +24,8 @@ import {
   MapPin,
   Clock,
   Check,
-  RefreshCw
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 
 interface ComplaintItem {
@@ -53,88 +54,7 @@ interface ComplaintItem {
   description?: string;
 }
 
-const INITIAL_COMPLAINTS: ComplaintItem[] = [
-  {
-    id: 'NXC-1042',
-    rawId: 'a1111111-1111-1111-1111-111111111111',
-    title: 'Massive road cave-in and sinkhole near Benz Circle Flyover',
-    category: 'Roads',
-    location: 'NH-16 Benz Circle Flyover, Vijayawada',
-    landmark: 'Near Benz Circle Flyover Pillar 14',
-    ward: 'Ward 24',
-    received: '10:42 AM',
-    status: 'In progress',
-    assignedTeam: 'Roads & Buildings Rapid Response Team',
-    assignedEmployeeId: 'EMP-101',
-    priority: 'Critical',
-    priorityScore: 98.5,
-    defectType: 'pothole_crater',
-    sla: '0 - 4 Hours (Emergency Dispatch)',
-    locationLat: 16.4990,
-    locationLng: 80.6540,
-    description: 'Deep dangerous trench and sinkhole formed on the main NH-16 highway approach slab after heavy downpour.'
-  },
-  {
-    id: 'NXC-1041',
-    rawId: 'd4444444-4444-4444-4444-444444444444',
-    title: 'Toxic sewage overflow from blocked storm water nala',
-    category: 'Drainage',
-    location: 'Brodipet 4th Line, Guntur',
-    landmark: 'Opposite Municipal Community Hall',
-    ward: 'Ward 12',
-    received: '10:18 AM',
-    status: 'In progress',
-    assignedTeam: 'Drainage & Sewerage Jetting Crew',
-    assignedEmployeeId: 'EMP-109',
-    priority: 'High',
-    priorityScore: 82.0,
-    defectType: 'manhole_overflow',
-    sla: '24 Hours (Next Shift Field Team)',
-    locationLat: 16.3010,
-    locationLng: 80.4410,
-    description: 'Main municipal canal choked with plastic waste, black sewage backflow submerging residential street.'
-  },
-  {
-    id: 'NXC-1040',
-    rawId: 'c3333333-3333-3333-3333-333333333333',
-    title: 'High tension cable sparking near bus terminal entrance',
-    category: 'Street Lights',
-    location: 'Pandit Nehru Bus Station (PNBS), Vijayawada',
-    landmark: 'RTC Bus Stand Entrance Gate 3',
-    ward: 'Ward 8',
-    received: '09:56 AM',
-    status: 'New',
-    assignedTeam: 'APEPDCL Lineman Quick Response Team',
-    assignedEmployeeId: 'EMP-125',
-    priority: 'Critical',
-    priorityScore: 99.8,
-    defectType: 'night_hazard_blackout',
-    sla: '0 - 4 Hours (Emergency Dispatch)',
-    locationLat: 16.5080,
-    locationLng: 80.6210,
-    description: 'High voltage electrical transmission line snapped from concrete pole and sparking in water puddle.'
-  },
-  {
-    id: 'NXC-1039',
-    rawId: 'b2222222-2222-2222-2222-222222222222',
-    title: 'Drinking water pipeline burst and yellow contaminated supply near KGH Casualty',
-    category: 'Water Supply',
-    location: 'King George Hospital (KGH) Casualty Gate, Visakhapatnam',
-    landmark: 'Near KGH Casualty Ward Entrance',
-    ward: 'Ward 14',
-    received: '09:21 AM',
-    status: 'Resolved',
-    assignedTeam: 'Water Works Emergency Repair Squad',
-    assignedEmployeeId: 'EMP-117',
-    priority: 'Critical',
-    priorityScore: 99.2,
-    defectType: 'pipeline_burst',
-    sla: '0 - 4 Hours (Emergency Dispatch)',
-    locationLat: 17.7102,
-    locationLng: 83.3050,
-    description: 'Main drinking water pipeline burst open outside hospital gate. Replacement gasket installed and leak sealed.'
-  }
-];
+const INITIAL_COMPLAINTS: ComplaintItem[] = [];
 
 export default function EmployeeWorkspace() {
   const { profile, signOut } = useAuth();
@@ -179,11 +99,12 @@ export default function EmployeeWorkspace() {
   // Fetch live workspace data from backend
   const fetchLiveWorkspaceData = async () => {
     try {
+      const empMunicipality = (profile as any)?.municipalityCode || (profile as any)?.municipalCorporation || (currentEmpCode.includes('-') && currentEmpCode.split('-').length === 3 ? currentEmpCode.split('-')[0] : undefined);
       const [liveData, hotspotData, empData, empsList] = await Promise.all([
-        api.getComplaints().catch(() => []),
+        api.getComplaints({ municipal_corporation: empMunicipality }).catch(() => []),
         api.getHotspots(100).catch(() => ({ total_hotspots: 0, hotspots: [] })),
         api.getEmployee(currentEmpCode).catch(() => null),
-        api.getEmployees().catch(() => [])
+        api.getEmployees({ municipality_code: empMunicipality }).catch(() => [])
       ]);
 
       if (empData) {
@@ -194,7 +115,7 @@ export default function EmployeeWorkspace() {
         setColleaguesList(empsList);
       }
 
-      if (liveData && liveData.length > 0) {
+      if (liveData) {
         const mapped: ComplaintItem[] = liveData.map((item: any) => {
           const shortCode = item.id.length > 8 ? `NXC-${item.id.slice(0, 6).toUpperCase()}` : item.id;
           const statusLabel = item.status === 'pending' ? 'New' : item.status === 'in_progress' ? 'In progress' : 'Resolved';
@@ -219,12 +140,15 @@ export default function EmployeeWorkspace() {
             sla: item.municipal_sla,
             resolutionNotes: item.resolution_notes,
             resolutionProofUrl: item.resolution_proof_url,
-            locationLat: item.location_lat,
-            locationLng: item.location_lng,
+            locationLat: item.location_lat || 16.5062,
+            locationLng: item.location_lng || 80.6480,
             description: item.description
           };
         });
         setComplaints(mapped);
+        if (!selectedPinComplaint && mapped[0]) {
+          setSelectedPinComplaint(mapped[0]);
+        }
       }
 
       if (hotspotData && hotspotData.hotspots) {
@@ -996,54 +920,58 @@ export default function EmployeeWorkspace() {
                   </div>
                 </div>
 
-                {/* Spatial Map Canvas Mock with Real Data Coordinates */}
+                {/* Google Maps GIS Cadre Grid with Real Coordinates & Turn-by-Turn Navigation */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                  <div className="lg:col-span-2 relative bg-slate-950 rounded-2xl p-6 h-96 flex flex-col justify-between overflow-hidden border border-slate-800 shadow-inner">
-                    {/* Background Grid Lines simulating Map Tile */}
-                    <div className="absolute inset-0 opacity-15 pointer-events-none" style={{
-                      backgroundImage: 'radial-gradient(#14b8a6 1px, transparent 1px)',
-                      backgroundSize: '24px 24px'
-                    }} />
-
-                    {/* Header overlay */}
-                    <div className="relative z-10 flex items-center justify-between text-xs text-teal-400 font-mono">
-                      <span>AP MUNICIPAL GIS &bull; SPATIAL CADRE RADAR</span>
-                      <span>ACTIVE HOTSPOTS: {hotspots.length}</span>
+                  <div className="lg:col-span-2 relative rounded-2xl overflow-hidden border border-slate-200 shadow-sm h-[440px] flex flex-col bg-slate-100">
+                    {/* Header overlay with Google Maps status */}
+                    <div className="bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between text-xs font-bold shrink-0">
+                      <div className="flex items-center gap-2">
+                        <MapPin size={15} className="text-teal-400" />
+                        <span>Google Maps AP Municipal Radar &bull; {selectedPinComplaint ? selectedPinComplaint.id : 'AP Cadre Grid'}</span>
+                      </div>
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${selectedPinComplaint?.locationLat || 16.5062},${selectedPinComplaint?.locationLng || 80.6480}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-[11px] font-bold transition shadow-xs"
+                      >
+                        <ExternalLink size={12} />
+                        <span>Turn-by-Turn Navigation ↗</span>
+                      </a>
                     </div>
 
-                    {/* Interactive Map Pins */}
-                    <div className="relative z-10 flex-1 flex items-center justify-around flex-wrap gap-4 p-4">
-                      {complaints.map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => setSelectedPinComplaint(item)}
-                          className={`group flex flex-col items-center transition-transform hover:scale-110 cursor-pointer ${
-                            selectedPinComplaint?.id === item.id ? 'scale-110' : ''
-                          }`}
-                        >
-                          <div
-                            className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-lg border-2 ${
-                              item.priority?.toLowerCase() === 'critical'
-                                ? 'bg-rose-600 border-rose-300'
-                                : item.status === 'Resolved'
-                                ? 'bg-emerald-600 border-emerald-300'
-                                : 'bg-amber-500 border-amber-300'
+                    {/* Live Google Maps Iframe Embed */}
+                    <iframe
+                      title="Google Maps AP Location"
+                      src={`https://maps.google.com/maps?q=${selectedPinComplaint?.locationLat || 16.5062},${selectedPinComplaint?.locationLng || 80.6480}&hl=en&z=15&output=embed`}
+                      className="w-full flex-1 border-0"
+                      loading="lazy"
+                    />
+
+                    {/* Complaint Quick Pins Pill Bar */}
+                    {complaints.length > 0 && (
+                      <div className="bg-white/95 backdrop-blur-xs p-2.5 border-t border-slate-200 flex items-center gap-2 overflow-x-auto shrink-0">
+                        <span className="text-[11px] font-bold text-slate-500 uppercase shrink-0">Incidents:</span>
+                        {complaints.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setSelectedPinComplaint(item)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer ${
+                              selectedPinComplaint?.id === item.id
+                                ? 'bg-[#0e2238] text-white shadow-xs ring-1 ring-teal-400'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
                             }`}
                           >
-                            <MapPin size={18} />
-                          </div>
-                          <span className="text-[10px] font-bold text-white bg-slate-900/90 px-2 py-0.5 rounded-full mt-1 border border-slate-700">
-                            {item.id}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Footer bar */}
-                    <div className="relative z-10 flex items-center justify-between text-[11px] text-slate-400 font-mono border-t border-slate-800/80 pt-2">
-                      <span>Coordinates: 16.5062° N, 80.6480° E (AP Grid)</span>
-                      <span>Live Satellite Layer &bull; OpenStreetMap</span>
-                    </div>
+                            <span className={`w-2 h-2 rounded-full ${
+                              item.priority?.toLowerCase() === 'critical' ? 'bg-rose-500' : item.status === 'Resolved' ? 'bg-emerald-500' : 'bg-amber-500'
+                            }`} />
+                            <span>{item.id}</span>
+                            <span className="text-[10px] opacity-75 truncate max-w-[120px]">{item.title?.slice(0, 18)}...</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Selected Pin Details Card */}
@@ -1064,31 +992,44 @@ export default function EmployeeWorkspace() {
                           <p className="text-xs text-slate-500 mt-1">{selectedPinComplaint.category}</p>
                         </div>
 
-                        <div className="text-xs text-slate-700 space-y-1 bg-white p-3 rounded-xl border border-slate-200">
+                        <div className="text-xs text-slate-700 space-y-1.5 bg-white p-3 rounded-xl border border-slate-200">
                           <div><strong>Location:</strong> {selectedPinComplaint.location}</div>
                           {selectedPinComplaint.landmark && <div><strong>Landmark:</strong> {selectedPinComplaint.landmark}</div>}
                           {selectedPinComplaint.ward && <div><strong>Ward:</strong> {selectedPinComplaint.ward}</div>}
+                          <div><strong>GPS Coordinates:</strong> {selectedPinComplaint.locationLat || 16.5062}° N, {selectedPinComplaint.locationLng || 80.6480}° E</div>
                           <div><strong>Priority Score:</strong> {Math.round(selectedPinComplaint.priorityScore || 75)}/100</div>
                           <div><strong>Assigned To:</strong> {selectedPinComplaint.assignedEmployeeId || 'Unassigned'}</div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingComplaint(selectedPinComplaint);
-                            setEditStatus(selectedPinComplaint.status === 'Resolved' ? 'Resolved' : 'In progress');
-                            setEditTeam(selectedPinComplaint.assignedTeam);
-                          }}
-                          className="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
-                        >
-                          Take Action on this Incident
-                        </button>
+                        <div className="space-y-2">
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${selectedPinComplaint.locationLat || 16.5062},${selectedPinComplaint.locationLng || 80.6480}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5"
+                          >
+                            <ExternalLink size={14} />
+                            <span>Navigate via Google Maps ↗</span>
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingComplaint(selectedPinComplaint);
+                              setEditStatus(selectedPinComplaint.status === 'Resolved' ? 'Resolved' : 'In progress');
+                              setEditTeam(selectedPinComplaint.assignedTeam);
+                            }}
+                            className="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                          >
+                            Take Action on this Incident
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <div className="my-auto text-center py-8 text-slate-400">
                         <MapPin size={28} className="mx-auto text-slate-300 mb-2" />
-                        <p className="text-xs font-bold text-slate-700">Click any map pin on the left</p>
-                        <p className="text-[11px] text-slate-400 mt-1">To view live incident coordinates, category, and citizen report details.</p>
+                        <p className="text-xs font-bold text-slate-700">Click any incident pin above</p>
+                        <p className="text-[11px] text-slate-400 mt-1">To view live Google Maps GPS coordinates, category, and citizen report details.</p>
                       </div>
                     )}
                   </div>
@@ -1399,6 +1340,28 @@ export default function EmployeeWorkspace() {
             </div>
 
             <div className="space-y-3.5 pt-1">
+              {/* Google Maps Incident Location Embed */}
+              <div className="rounded-xl overflow-hidden border border-slate-200 shadow-2xs">
+                <iframe
+                  title="Incident Google Maps Location"
+                  src={`https://maps.google.com/maps?q=${editingComplaint.locationLat || 16.5062},${editingComplaint.locationLng || 80.6480}&hl=en&z=15&output=embed`}
+                  className="w-full h-32 border-0"
+                  loading="lazy"
+                />
+                <div className="bg-slate-50 px-3 py-1.5 flex items-center justify-between text-[11px] text-slate-600 font-medium border-t border-slate-200">
+                  <span className="truncate max-w-[260px]">{editingComplaint.location}</span>
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${editingComplaint.locationLat || 16.5062},${editingComplaint.locationLng || 80.6480}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-teal-700 font-bold hover:underline flex items-center gap-1 shrink-0"
+                  >
+                    <span>Google Maps ↗</span>
+                    <ExternalLink size={11} />
+                  </a>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Work Order Status</label>
                 <select

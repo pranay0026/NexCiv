@@ -149,3 +149,55 @@ def employee_login(payload: EmployeeLoginPayload, supabase: Client = Depends(get
 def get_auth_me(current_user: dict = Depends(get_current_user)):
     """Returns the authenticated profile of the current session."""
     return current_user
+
+# ==============================================================================
+# CITIZEN REGISTRATION & AUTHENTICATION ENDPOINTS
+# ==============================================================================
+class CitizenRegisterPayload(BaseModel):
+    name: str
+    email: str
+    password: str
+    phone: Optional[str] = None
+    municipality_code: Optional[str] = "ELR"
+    ward: Optional[str] = None
+    address: Optional[str] = None
+
+class CitizenLoginPayload(BaseModel):
+    email: str
+    password: str
+
+@router.post("/register-citizen")
+def register_citizen_endpoint(payload: CitizenRegisterPayload):
+    """Registers a new citizen with their chosen Andhra Pradesh Municipality/Corporation."""
+    from data_manager import register_citizen
+    try:
+        profile = register_citizen(payload.dict())
+        return {
+            "access_token": f"citizen-{profile['id']}",
+            "token_type": "bearer",
+            "role": "citizen",
+            "user": profile
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/login-citizen")
+def login_citizen_endpoint(payload: CitizenLoginPayload):
+    """Authenticates citizen with email and password."""
+    from data_manager import authenticate_citizen
+    profile = authenticate_citizen(payload.email, payload.password)
+    if not profile:
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    return {
+        "access_token": f"citizen-{profile['id']}",
+        "token_type": "bearer",
+        "role": "citizen",
+        "user": profile
+    }
+
+@router.get("/municipalities")
+def list_all_ap_municipalities():
+    """Returns all Andhra Pradesh Municipal Corporations and Municipalities across all 26 districts."""
+    from data_manager import ALL_AP_MUNICIPALITIES
+    return ALL_AP_MUNICIPALITIES
+
