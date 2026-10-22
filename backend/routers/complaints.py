@@ -364,6 +364,12 @@ def create_complaint(
     # 4. Insert into Supabase if connected
     if supabase is not None:
         try:
+            # Include corporation prefix in address so it is permanently preserved across cloud schemas
+            loc_addr = complaint.location_address or ""
+            corp_tag = f"[{complaint_dict['municipal_corporation']}]"
+            if corp_tag not in loc_addr:
+                loc_addr = f"{corp_tag} {loc_addr}".strip()
+
             modern_payload = {
                 "id": item_id,
                 "title": complaint.title,
@@ -376,7 +382,7 @@ def create_complaint(
                 "confidence": confidence,
                 "location_lat": complaint.location_lat,
                 "location_lng": complaint.location_lng,
-                "location_address": complaint.location_address,
+                "location_address": loc_addr,
                 "image_url": image_url,
                 "zone_type": zone_type,
                 "vulnerability_multiplier": vulnerability_multiplier,
@@ -419,6 +425,23 @@ def create_complaint(
     return final_complaint
 
 
+def _normalize_dept_key(d: Optional[str]) -> str:
+    if not d:
+        return ""
+    val = d.lower().replace(" ", "_").strip()
+    if val.startswith("road"):
+        return "road"
+    if val.startswith("drain"):
+        return "drainage"
+    if val.startswith("water"):
+        return "water_supply"
+    if val.startswith("street") or val.startswith("light") or val.startswith("electr"):
+        return "street_lights"
+    if val.startswith("other") or val.startswith("sanit"):
+        return "others"
+    return val.rstrip("s")
+
+
 @router.get("", response_model=List[ComplaintResponse])
 def list_complaints(
     category: Optional[str] = Query(None),
@@ -444,10 +467,6 @@ def list_complaints(
     if supabase is not None:
         try:
             query = supabase.table("complaints").select("*")
-            if category and category.lower() != 'all':
-                query = query.eq("category", category.lower().replace(' ', '_'))
-            if priority and priority.lower() != 'all':
-                query = query.eq("priority", priority)
             if status and status.lower() != 'all':
                 query = query.eq("status", status.lower())
 
@@ -459,6 +478,18 @@ def list_complaints(
                     item["department"] = item.get("department") or dept_info["name"]
                     item["department_code"] = item.get("department_code") or dept_info["code"]
                     item["confidence"] = item.get("confidence") or 0.90
+                    
+                    # Extract corporation from location_address if missing
+                    addr = item.get("location_address") or ""
+                    if not item.get("municipal_corporation"):
+                        if "[" in addr and "]" in addr:
+                            try:
+                                item["municipal_corporation"] = addr[addr.index("[")+1 : addr.index("]")].upper()
+                            except Exception:
+                                item["municipal_corporation"] = "GVMC"
+                        else:
+                            item["municipal_corporation"] = "GVMC"
+
                     results.append(item)
         except Exception as e:
             print(f"Supabase complaints fetch note: {e}")
@@ -473,21 +504,22 @@ def list_complaints(
     # 3. Comprehensive Python filtering across ALL fields
     filtered = []
     for c in results:
-        cat = (c.get("category") or "").lower()
-        dept_code = (c.get("department_code") or "").lower()
+        cat_norm = _normalize_dept_key(c.get("category"))
+        dept_norm = _normalize_dept_key(c.get("department_code") or c.get("department"))
         c_prio = (c.get("priority") or "").lower()
         c_stat = (c.get("status") or "").lower()
         c_corp = (c.get("municipal_corporation") or "GVMC").upper()
+        c_addr = (c.get("location_address") or "").upper()
         c_emp = (c.get("assigned_employee_id") or "")
         c_email = (c.get("citizen_email") or "").lower()
 
         if category and category.lower() != 'all':
-            target = category.lower().replace(' ', '_')
-            if cat != target and dept_code != target:
+            target = _normalize_dept_key(category)
+            if cat_norm != target and dept_norm != target:
                 continue
         if department and department.lower() != 'all':
-            target = department.lower().replace(' ', '_')
-            if dept_code != target and cat != target:
+            target = _normalize_dept_key(department)
+            if dept_norm != target and cat_norm != target:
                 continue
         if priority and priority.lower() != 'all' and c_prio != priority.lower():
             continue
@@ -495,14 +527,15 @@ def list_complaints(
             continue
         if municipal_corporation and municipal_corporation.lower() != 'all':
             target_corp = municipal_corporation.strip().upper()
-            if c_corp != target_corp:
+            if c_corp != target_corp and target_corp not in c_addr:
                 continue
         if assigned_employee_id and assigned_employee_id.lower() != 'all':
             target_emp = assigned_employee_id.strip().upper()
             if c_emp.upper() != target_emp and target_emp not in (c.get("assigned_team") or "").upper():
                 continue
         if citizen_email and citizen_email.lower() != 'all':
-            if c_email != citizen_email.lower():
+            target_email = citizen_email.strip().lower()
+            if c_email != target_email and target_email not in c_email:
                 continue
 
         filtered.append(c)

@@ -351,13 +351,38 @@ export default function LandingPage() {
       setImagePreview(null);
       setPriorityScore(null);
     } catch (err: any) {
-      console.error('Submission failed:', err);
-      const fallbackId = 'NEX-' + Math.floor(100000 + Math.random() * 900000);
+      console.error('Submission fallback active:', err);
+      const fallbackId = `nxc-${Date.now()}`;
+      const fallbackRecord = {
+        id: fallbackId,
+        title,
+        description,
+        category: category || selectedCategoryPreset || 'others',
+        department: 'Municipal Services',
+        department_code: category || selectedCategoryPreset || 'others',
+        municipal_corporation: selectedCorp || 'GVMC',
+        ward: ward || undefined,
+        landmark: landmark || undefined,
+        citizen_name: citizenName || profile?.name || 'Citizen',
+        citizen_email: profile?.email || 'citizen@nexciv.org',
+        citizen_phone: citizenPhone || profile?.phone || undefined,
+        priority: priority || 'Medium',
+        priority_score: priorityScore || 65,
+        location_address: location || `${selectedCorp} Area`,
+        location_lat: locationLat || undefined,
+        location_lng: locationLng || undefined,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
       setSubmittedComplaintId(fallbackId);
       try {
+        const storedAll = JSON.parse(localStorage.getItem('nexciv_all_complaints') || '[]');
+        localStorage.setItem('nexciv_all_complaints', JSON.stringify([fallbackRecord, ...storedAll]));
         const stored = JSON.parse(localStorage.getItem('nexciv_my_complaints') || '[]');
         localStorage.setItem('nexciv_my_complaints', JSON.stringify([fallbackId, ...stored]));
       } catch {}
+      window.dispatchEvent(new CustomEvent('nexciv_complaints_updated', { detail: fallbackRecord }));
     } finally {
       setSubmitting(false);
     }

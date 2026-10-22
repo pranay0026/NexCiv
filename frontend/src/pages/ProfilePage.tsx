@@ -70,14 +70,17 @@ export default function ProfilePage() {
       const userComplaints = allComplaints.filter((c) => {
         const shortCode = c.id.length > 8 ? `NXC-${c.id.slice(0, 6).toUpperCase()}` : c.id;
         const matchesLocal = locallyFiled.some((id) => id === c.id || id === shortCode || c.id.includes(id) || id.includes(c.id));
-        const matchesEmail = c.citizen_email && c.citizen_email.toLowerCase() === userEmail;
-        const matchesName = profile?.name && c.citizen_name && c.citizen_name.toLowerCase().includes(profile.name.toLowerCase());
+        const matchesEmail = c.citizen_email && (c.citizen_email.toLowerCase() === userEmail || userEmail.includes(c.citizen_email.toLowerCase()));
+        const matchesName = profile?.name && c.citizen_name && (c.citizen_name.toLowerCase().includes(profile.name.toLowerCase()) || profile.name.toLowerCase().includes(c.citizen_name.toLowerCase()));
         const isDemoMatch = c.citizen_name?.toLowerCase().includes('pran') || c.citizen_name?.toLowerCase().includes('venkat');
         return matchesLocal || matchesEmail || matchesName || isDemoMatch;
       });
 
+      // Show citizen complaints if matched, or show all recent complaints so citizen has a full dashboard
+      const displayList = userComplaints.length > 0 ? userComplaints : allComplaints;
+
       // Sort so most recent is first
-      const sorted = (userComplaints.length > 0 ? userComplaints : allComplaints).sort((a, b) => {
+      const sorted = [...displayList].sort((a, b) => {
         return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
       });
 
@@ -91,6 +94,8 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchCitizenComplaints();
+    window.addEventListener('nexciv_complaints_updated', fetchCitizenComplaints);
+    return () => window.removeEventListener('nexciv_complaints_updated', fetchCitizenComplaints);
   }, [profile]);
 
   const handleSaveProfile = (e: React.FormEvent) => {

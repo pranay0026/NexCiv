@@ -318,7 +318,21 @@ export default function AnalyticsPortal() {
             setAssignCaseId(mappedQueue[0].id);
           }
         } else {
-          setWorkQueue([]);
+          // If filtered list is empty, show all active items so queue is never dead
+          api.getComplaints().then((all) => {
+            if (all && all.length > 0) {
+              const fallbackMapped: WorkItem[] = all.slice(0, 15).map((c: any) => ({
+                id: c.id,
+                title: c.title,
+                code: c.id.length > 8 ? `NXC-${c.id.slice(0, 6).toUpperCase()}` : c.id,
+                location: c.landmark || c.location_address || 'Andhra Pradesh',
+                assignedTo: c.assigned_employee_id || c.assigned_team || 'Awaiting assignment',
+                timeAgo: 'Live',
+                status: (c.status === 'pending' ? 'Awaiting assignment' : c.status === 'in_progress' ? 'In progress' : 'Resolved') as any
+              }));
+              setWorkQueue(fallbackMapped);
+            }
+          }).catch(() => {});
         }
       })
       .catch((err) => console.warn('Complaints work queue fetch note:', err));
@@ -332,8 +346,12 @@ export default function AnalyticsPortal() {
 
   useEffect(() => {
     fetchLiveWorkQueue();
+    window.addEventListener('nexciv_complaints_updated', fetchLiveWorkQueue);
     const interval = setInterval(fetchLiveWorkQueue, 7000);
-    return () => clearInterval(interval);
+    return () => {
+      window.removeEventListener('nexciv_complaints_updated', fetchLiveWorkQueue);
+      clearInterval(interval);
+    };
   }, [selectedCorp, selectedDept, selectedStatus]);
 
   useEffect(() => {
