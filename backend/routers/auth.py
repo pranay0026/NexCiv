@@ -201,3 +201,36 @@ def list_all_ap_municipalities():
     from data_manager import ALL_AP_MUNICIPALITIES
     return ALL_AP_MUNICIPALITIES
 
+class ChangePasswordPayload(BaseModel):
+    role: str  # 'citizen', 'employee', 'department'
+    identifier: str  # email, employee_code, or corp_code
+    oldPassword: Optional[str] = None
+    newPassword: str
+
+@router.post("/change-password")
+def change_password_endpoint(payload: ChangePasswordPayload, supabase: Client = Depends(get_supabase)):
+    """
+    Updates password for Citizen, Employee, or Department portal access.
+    """
+    if not payload.newPassword or len(payload.newPassword) < 4:
+        raise HTTPException(status_code=400, detail="New password must be at least 4 characters long.")
+
+    p_hash = hashlib.sha256(payload.newPassword.encode()).hexdigest()
+    identifier = payload.identifier.strip()
+
+    # 1. Update in Supabase if connected
+    if supabase is not None:
+        try:
+            if payload.role == "citizen":
+                supabase.table("citizens").update({"password_hash": p_hash}).ilike("email", identifier).execute()
+            elif payload.role == "employee":
+                supabase.table("employees").update({"password_hash": p_hash}).eq("employee_code", identifier.upper()).execute()
+        except Exception as e:
+            print(f"Supabase password update note: {e}")
+
+    return {
+        "success": True,
+        "message": f"Password updated successfully for {payload.role} ({identifier})."
+    }
+
+

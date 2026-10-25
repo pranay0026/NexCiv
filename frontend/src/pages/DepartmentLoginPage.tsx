@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { Building2, ShieldCheck, KeyRound, Lock, ArrowLeft, ArrowRight, CheckCircle2, MapPin, Layers, Check } from 'lucide-react';
+import { Building2, ShieldCheck, KeyRound, Lock, ArrowLeft, ArrowRight, CheckCircle2, MapPin, Layers, Check, Eye, EyeOff } from 'lucide-react';
 import { api, AP_CORPORATIONS, APCorporation } from '../lib/api';
 
 const MUNICIPAL_WINGS = [
@@ -63,12 +63,14 @@ export default function DepartmentLoginPage() {
   const [corporations, setCorporations] = useState<APCorporation[]>(AP_CORPORATIONS);
   const [selectedCorpCode, setSelectedCorpCode] = useState('ELR');
   const [corpPassword, setCorpPassword] = useState('');
+  const [showCorpKey, setShowCorpKey] = useState(false);
   const [corpVerified, setCorpVerified] = useState(false);
   const [corpError, setCorpError] = useState('');
 
   // Department Wing state
   const [selectedWing, setSelectedWing] = useState('supreme');
   const [deptPassword, setDeptPassword] = useState('');
+  const [showDeptPassword, setShowDeptPassword] = useState(false);
   const [deptError, setDeptError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -259,19 +261,37 @@ export default function DepartmentLoginPage() {
                 )}
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Municipal Corporation Administrative Key *
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      Municipal Corporation Administrative Key *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowCorpKey(!showCorpKey)}
+                      className="text-[11px] text-teal-400 hover:text-teal-300 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      {showCorpKey ? <EyeOff size={13} /> : <Eye size={13} />}
+                      <span>{showCorpKey ? 'Hide key' : 'Show key'}</span>
+                    </button>
+                  </div>
                   <div className="relative">
                     <input
-                      type="password"
+                      type={showCorpKey ? 'text' : 'password'}
                       value={corpPassword}
                       onChange={(e) => setCorpPassword(e.target.value)}
                       required
-                      placeholder="••••••••"
-                      className="w-full px-4 py-2.5 bg-[#132c48] border border-slate-700 rounded-xl text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-teal-500 pl-10"
+                      placeholder="Enter municipal admin key"
+                      className="w-full px-4 py-2.5 bg-[#132c48] border border-slate-700 rounded-xl text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-teal-500 pl-10 pr-10"
                     />
                     <KeyRound size={16} className="absolute left-3.5 top-3 text-slate-400" />
+                    <button
+                      type="button"
+                      onClick={() => setShowCorpKey(!showCorpKey)}
+                      className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-200 cursor-pointer"
+                      aria-label="Toggle key visibility"
+                    >
+                      {showCorpKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
                   <p className="text-[11px] text-slate-400 mt-1">
                     Default key for all 17 municipal corporations: <code className="bg-slate-800 text-teal-300 px-1 py-0.5 rounded font-bold">admin@123</code>
@@ -366,19 +386,37 @@ export default function DepartmentLoginPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Department Security Password *
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      Department Security Password *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowDeptPassword(!showDeptPassword)}
+                      className="text-[11px] text-teal-400 hover:text-teal-300 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      {showDeptPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+                      <span>{showDeptPassword ? 'Hide password' : 'Show password'}</span>
+                    </button>
+                  </div>
                   <div className="relative">
                     <input
-                      type="password"
+                      type={showDeptPassword ? 'text' : 'password'}
                       value={deptPassword}
                       onChange={(e) => setDeptPassword(e.target.value)}
                       required
-                      placeholder="••••••••"
-                      className="w-full px-4 py-2.5 bg-[#132c48] border border-slate-700 rounded-xl text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-teal-500 pl-10"
+                      placeholder="Enter department password"
+                      className="w-full px-4 py-2.5 bg-[#132c48] border border-slate-700 rounded-xl text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-teal-500 pl-10 pr-10"
                     />
                     <Lock size={16} className="absolute left-3.5 top-3 text-slate-400" />
+                    <button
+                      type="button"
+                      onClick={() => setShowDeptPassword(!showDeptPassword)}
+                      className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-200 cursor-pointer"
+                      aria-label="Toggle password visibility"
+                    >
+                      {showDeptPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
                   <p className="text-[11px] text-slate-400 mt-1">
                     Department authorization password: <code className="bg-slate-800 text-teal-300 px-1 py-0.5 rounded font-bold">dept@123</code> or <code className="bg-slate-800 text-teal-300 px-1 py-0.5 rounded font-bold">admin@123</code>

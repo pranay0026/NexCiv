@@ -1000,3 +1000,242 @@ export const AP_40_EMPLOYEES = [
     "password": "emp@123"
   }
 ];
+
+// Officer names pool specifically tailored for Andhra Pradesh municipal divisions
+const AP_OFFICER_NAME_POOLS: Record<string, Array<{ name: string; initials: string; phone: string }>> = {
+  ELR: [
+    { name: "S. Venkata Ramana", initials: "VR", phone: "+91 94401 20101" },
+    { name: "M. Satyanarayana Murthy", initials: "SM", phone: "+91 94401 20102" },
+    { name: "K. Rajesh Kumar", initials: "RK", phone: "+91 94401 20103" },
+    { name: "B. Durga Prasad", initials: "DP", phone: "+91 94401 20104" },
+    { name: "T. Lakshmi Devi", initials: "LD", phone: "+91 94401 20105" },
+    { name: "G. Suresh Babu", initials: "SB", phone: "+91 94401 20106" },
+    { name: "Ch. Anjaneyulu", initials: "CA", phone: "+91 94401 20107" },
+    { name: "P. Ramakrishna Rao", initials: "RR", phone: "+91 94401 20108" },
+    { name: "N. Subrahmanyam", initials: "NS", phone: "+91 94401 20109" },
+    { name: "V. Padmavathi", initials: "VP", phone: "+91 94401 20110" }
+  ],
+  GVMC: [
+    { name: "G. Jagannadha Rao", initials: "JR", phone: "+91 94401 10101" },
+    { name: "V. Anusha Reddy", initials: "AR", phone: "+91 94401 10102" },
+    { name: "P. Srinivas", initials: "PS", phone: "+91 94401 10103" },
+    { name: "K. Hemalatha", initials: "KH", phone: "+91 94401 10104" },
+    { name: "M. Bhaskara Rao", initials: "BR", phone: "+91 94401 10105" },
+    { name: "R. Pradeep Varma", initials: "PV", phone: "+91 94401 10106" },
+    { name: "S. Venkateswara Rao", initials: "VR", phone: "+91 94401 10107" },
+    { name: "D. Sireesha", initials: "DS", phone: "+91 94401 10108" },
+    { name: "Y. Appa Rao", initials: "AR", phone: "+91 94401 10109" },
+    { name: "B. Appala Naidu", initials: "AN", phone: "+91 94401 10110" }
+  ],
+  VMC: [
+    { name: "A. Ramesh Kumar", initials: "RK", phone: "+91 94401 00101" },
+    { name: "K. Srinivasa Rao", initials: "SR", phone: "+91 94401 00102" },
+    { name: "P. Venkata Narayana", initials: "VN", phone: "+91 94401 00103" },
+    { name: "D. Madhusudhan Reddy", initials: "MR", phone: "+91 94401 00104" },
+    { name: "Ch. Bhanu Prakash", initials: "BP", phone: "+91 94401 00105" },
+    { name: "T. Krishna Murthy", initials: "KM", phone: "+91 94401 00106" },
+    { name: "E. Radhika", initials: "ER", phone: "+91 94401 00107" },
+    { name: "N. Durga Prasad", initials: "DP", phone: "+91 94401 00108" },
+    { name: "M. Venkata Rao", initials: "VR", phone: "+91 94401 00109" },
+    { name: "L. Mohan Krishna", initials: "MK", phone: "+91 94401 00110" }
+  ],
+  GMC: [
+    { name: "P. Sambasiva Rao", initials: "SR", phone: "+91 94401 30101" },
+    { name: "B. Koteswara Rao", initials: "KR", phone: "+91 94401 30102" },
+    { name: "M. Anuradha", initials: "MA", phone: "+91 94401 30103" },
+    { name: "S. Siva Rama Krishna", initials: "SK", phone: "+91 94401 30104" },
+    { name: "Ch. Srinivasa Reddy", initials: "SR", phone: "+91 94401 30105" },
+    { name: "K. Venkata Ratnam", initials: "VR", phone: "+91 94401 30106" },
+    { name: "G. Veeraiah", initials: "GV", phone: "+91 94401 30107" },
+    { name: "T. Rama Rao", initials: "TR", phone: "+91 94401 30108" },
+    { name: "N. Anjaneya Prasad", initials: "AP", phone: "+91 94401 30109" },
+    { name: "D. Mallikarjuna Rao", initials: "MR", phone: "+91 94401 30110" }
+  ],
+  BVM: [
+    { name: "Ch. Surya Prakash Raju", initials: "SP", phone: "+91 94401 40101" },
+    { name: "D. Subrahmanyam Varma", initials: "SV", phone: "+91 94401 40102" },
+    { name: "K. Satya Narayana", initials: "SN", phone: "+91 94401 40103" },
+    { name: "M. Vijaya Lakshmi", initials: "VL", phone: "+91 94401 40104" },
+    { name: "P. Ranga Rao", initials: "RR", phone: "+91 94401 40105" },
+    { name: "G. Rama Krishna Raju", initials: "RR", phone: "+91 94401 40106" },
+    { name: "V. Bhaskara Murthy", initials: "BM", phone: "+91 94401 40107" },
+    { name: "S. Nageswara Rao", initials: "NR", phone: "+91 94401 40108" }
+  ],
+  TPG: [
+    { name: "B. Venkateswarlu", initials: "BV", phone: "+91 94401 50101" },
+    { name: "T. Murali Mohan", initials: "MM", phone: "+91 94401 50102" },
+    { name: "K. Rama Mohan Rao", initials: "RM", phone: "+91 94401 50103" },
+    { name: "P. Venkata Subbaiah", initials: "VS", phone: "+91 94401 50104" },
+    { name: "G. Sarada", initials: "GS", phone: "+91 94401 50105" },
+    { name: "M. Nanda Kishore", initials: "NK", phone: "+91 94401 50106" },
+    { name: "Ch. Ramesh", initials: "CR", phone: "+91 94401 50107" },
+    { name: "S. Srinivasulu", initials: "SS", phone: "+91 94401 50108" }
+  ]
+};
+
+// Cadre roles across 5 civic departments
+const CADRE_ROLES = [
+  {
+    dept: "road",
+    deptName: "Roads & Buildings Department",
+    designation: "Superintending Engineer (R&B)",
+    skills: "Bitumen Paving, Pothole Patching, Highway Safety",
+    perf: "On track",
+    rating: 4.9
+  },
+  {
+    dept: "drainage",
+    deptName: "Drainage & Sewerage Department",
+    designation: "Executive Engineer (Public Health & Drainage)",
+    skills: "Stormwater Drainage, Manhole Desilting, Inflow Management",
+    perf: "On track",
+    rating: 4.8
+  },
+  {
+    dept: "water_supply",
+    deptName: "Water Supply & Quality Department",
+    designation: "Assistant Executive Engineer (Water Works)",
+    skills: "Pipeline Distribution, Pressure Testing, Chlorination",
+    perf: "On track",
+    rating: 4.7
+  },
+  {
+    dept: "street_lights",
+    deptName: "Electrical & Street Lighting Department",
+    designation: "Assistant Engineer (Electrical & Grid Safety)",
+    skills: "High-Mast LEDs, Phase Shifting, Transformer Safety",
+    perf: "On track",
+    rating: 4.8
+  },
+  {
+    dept: "others",
+    deptName: "Sanitation & Solid Waste Management",
+    designation: "Chief Sanitary Inspector (CMOH Cadre)",
+    skills: "Solid Waste Segregation, Compactor Logistics, Ward Sanitation",
+    perf: "On track",
+    rating: 4.9
+  },
+  {
+    dept: "road",
+    deptName: "Roads & Buildings Department",
+    designation: "Assistant Engineer (Urban Roads & Asphalt)",
+    skills: "Rapid Patching, Road Milling, Speed Breakers",
+    perf: "On track",
+    rating: 4.7
+  },
+  {
+    dept: "drainage",
+    deptName: "Drainage & Sewerage Department",
+    designation: "Junior Engineer (Canal & Gutter Squad)",
+    skills: "Canal Cleaning, Suction Machine Operations, Overflow Control",
+    perf: "On track",
+    rating: 4.6
+  },
+  {
+    dept: "water_supply",
+    deptName: "Water Supply & Quality Department",
+    designation: "Junior Engineer (Pipeline Maintenance)",
+    skills: "Leak Detection, Valve Operations, Contamination Screening",
+    perf: "On track",
+    rating: 4.8
+  },
+  {
+    dept: "street_lights",
+    deptName: "Electrical & Street Lighting Department",
+    designation: "Sub-Division Electrician (Grid Operations)",
+    skills: "Cable Fault Rectification, Feeder Panel Repairs",
+    perf: "On track",
+    rating: 4.7
+  },
+  {
+    dept: "others",
+    deptName: "Sanitation & Solid Waste Management",
+    designation: "Field Sanitation Inspector (Ward Cleanliness)",
+    skills: "Bio-Waste Management, Drain Spraying, Citizen Grievance Audit",
+    perf: "On track",
+    rating: 4.8
+  }
+];
+
+// Deterministic generic officer names for any other AP municipality
+const GENERIC_AP_NAMES = [
+  { name: "K. Venkata Ramana", initials: "VR" },
+  { name: "M. Satyanarayana", initials: "MS" },
+  { name: "P. Srinivasa Rao", initials: "PS" },
+  { name: "B. Durga Prasad", initials: "DP" },
+  { name: "G. Suresh Babu", initials: "SB" },
+  { name: "T. Rajesh Kumar", initials: "RK" },
+  { name: "Ch. Anjaneyulu", initials: "CA" },
+  { name: "S. Rama Krishna", initials: "RK" },
+  { name: "N. Subrahmanyam", initials: "NS" },
+  { name: "V. Lakshmi Narayana", initials: "LN" }
+];
+
+/**
+ * Returns a dedicated, 100% municipality-isolated cadre of employees for ANY Andhra Pradesh town.
+ * Eluru employees NEVER mix with Visakhapatnam, Vijayawada, or any other town.
+ */
+export function getMunicipalityCadre(corpCode: string): any[] {
+  const code = (corpCode || 'ELR').trim().toUpperCase();
+  const namePool = AP_OFFICER_NAME_POOLS[code] || GENERIC_AP_NAMES;
+
+  // Retrieve custom registered employees saved specifically for this municipality
+  let customEmployees: any[] = [];
+  try {
+    const raw = localStorage.getItem(`nexciv_custom_employees_${code}`);
+    if (raw) customEmployees = JSON.parse(raw);
+  } catch {}
+
+  const standardCadre = CADRE_ROLES.map((role, idx) => {
+    const officerInfo = namePool[idx % namePool.length];
+    const empCode = `${code}-EMP-${101 + idx}`;
+    const cleanId = `emp-${code.toLowerCase()}-${101 + idx}`;
+    const officerName = `${officerInfo.name} (${code})`;
+
+    return {
+      id: cleanId,
+      employee_code: empCode,
+      name: officerName,
+      initials: officerInfo.initials,
+      email: `${empCode.toLowerCase().replace('-', '.')}@nexciv.ap.gov.in`,
+      phone: (officerInfo as any).phone || `+91 94401 ${code.slice(0, 2).charCodeAt(0)}${101 + idx}`,
+      municipality_code: code,
+      department: role.dept,
+      department_name: role.deptName,
+      designation: `${role.designation} — ${code}`,
+      zone: `${code} Municipal Jurisdiction & Ward Roster`,
+      status: "active",
+      assigned_count: 3 + ((idx * 7 + code.charCodeAt(0)) % 15),
+      completed_count: 12 + ((idx * 5 + code.charCodeAt(0)) % 25),
+      pending_count: 1 + ((idx * 3) % 5),
+      overdue_count: (idx % 4 === 0) ? 1 : 0,
+      avg_resolution_days: +(1.2 + (idx % 3) * 0.4).toFixed(1),
+      completion_rate: +(85 + (idx % 12)).toFixed(1),
+      rating: role.rating,
+      performance: role.perf,
+      skills: role.skills,
+      created_at: "2026-01-01T09:00:00Z",
+      updated_at: "2026-10-25T18:00:00Z",
+      password: "emp@123"
+    };
+  });
+
+  return [...customEmployees, ...standardCadre];
+}
+
+/**
+ * Register a newly created municipal employee strictly bound to that municipality.
+ */
+export function saveCustomMunicipalityEmployee(corpCode: string, emp: any) {
+  const code = (corpCode || 'ELR').trim().toUpperCase();
+  try {
+    const key = `nexciv_custom_employees_${code}`;
+    const raw = localStorage.getItem(key);
+    const existing = raw ? JSON.parse(raw) : [];
+    existing.unshift(emp);
+    localStorage.setItem(key, JSON.stringify(existing));
+  } catch (e) {
+    console.warn("Could not save custom employee:", e);
+  }
+}
+

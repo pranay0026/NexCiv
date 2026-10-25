@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Navigate, Link } from 'react-router-dom';
-import { Building2, Users, Shield, ArrowLeft, CheckCircle2, UserPlus, LogIn, AlertCircle } from 'lucide-react';
+import { Building2, Users, Shield, ArrowLeft, CheckCircle2, UserPlus, LogIn, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { api, EmployeeRecord, AP_CORPORATIONS } from '../lib/api';
 
 export default function LoginPage() {
   const { profile, loginAsCitizen, loginAsEmployee, signInWithGoogle, loading } = useAuth();
   const [activeTab, setActiveTab] = useState<'citizen' | 'employee'>('citizen');
   const [citizenMode, setCitizenMode] = useState<'signin' | 'register'>('signin');
+
+  // Password Visibility States (show/hide password toggle)
+  const [showCitizenPassword, setShowCitizenPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showEmpPassword, setShowEmpPassword] = useState(false);
 
   // Citizen Sign In / Registration state (CLEAN EMPTY INITIAL VALUES - NO FAKE DEFAULTS)
   const [citizenEmail, setCitizenEmail] = useState('');
@@ -21,7 +26,8 @@ export default function LoginPage() {
   const [citizenSuccess, setCitizenSuccess] = useState('');
   const [submittingCitizen, setSubmittingCitizen] = useState(false);
 
-  // Employee state (CLEAN EMPTY INITIAL VALUES)
+  // Employee state (Dedicated isolated municipality cadre)
+  const [selectedEmpMunicipality, setSelectedEmpMunicipality] = useState('ELR');
   const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
   const [selectedEmpCode, setSelectedEmpCode] = useState('');
   const [customEmpCode, setCustomEmpCode] = useState('');
@@ -29,13 +35,17 @@ export default function LoginPage() {
   const [employeeError, setEmployeeError] = useState('');
   const [loggingInEmp, setLoggingInEmp] = useState(false);
 
+  // Load dedicated cadre for selected municipality
   useEffect(() => {
-    api.getEmployees().then(data => {
+    api.getEmployees({ municipality_code: selectedEmpMunicipality }).then(data => {
       if (data && data.length > 0) {
         setEmployees(data);
+        if (!selectedEmpCode || !data.some(d => d.employee_code === selectedEmpCode)) {
+          setSelectedEmpCode(data[0].employee_code);
+        }
       }
     }).catch(() => {});
-  }, []);
+  }, [selectedEmpMunicipality]);
 
   if (loading) {
     return (
@@ -177,7 +187,8 @@ export default function LoginPage() {
       targetCode,
       emp?.name || `Officer (${targetCode})`,
       emp?.department || 'road',
-      emp?.designation || 'Municipal Engineer'
+      emp?.designation || 'Municipal Engineer',
+      selectedEmpMunicipality
     );
     setLoggingInEmp(false);
   };
@@ -349,15 +360,35 @@ export default function LoginPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Password *</label>
-                      <input
-                        type="password"
-                        value={citizenPassword}
-                        onChange={(e) => setCitizenPassword(e.target.value)}
-                        placeholder="Enter your password"
-                        required
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none"
-                      />
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-700">Password *</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowCitizenPassword(!showCitizenPassword)}
+                          className="text-[11px] text-teal-600 hover:text-teal-700 font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          {showCitizenPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+                          <span>{showCitizenPassword ? 'Hide' : 'Show'}</span>
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showCitizenPassword ? 'text' : 'password'}
+                          value={citizenPassword}
+                          onChange={(e) => setCitizenPassword(e.target.value)}
+                          placeholder="Enter your password"
+                          required
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCitizenPassword(!showCitizenPassword)}
+                          className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          aria-label="Toggle password visibility"
+                        >
+                          {showCitizenPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
 
                     <button
@@ -450,15 +481,35 @@ export default function LoginPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Create Password *</label>
-                      <input
-                        type="password"
-                        value={citizenPassword}
-                        onChange={(e) => setCitizenPassword(e.target.value)}
-                        placeholder="Choose a password"
-                        required
-                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none"
-                      />
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-700">Create Password *</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                          className="text-[11px] text-teal-600 hover:text-teal-700 font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          {showRegisterPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+                          <span>{showRegisterPassword ? 'Hide' : 'Show'}</span>
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showRegisterPassword ? 'text' : 'password'}
+                          value={citizenPassword}
+                          onChange={(e) => setCitizenPassword(e.target.value)}
+                          placeholder="Choose a password (min 4 characters)"
+                          required
+                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                          className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          aria-label="Toggle password visibility"
+                        >
+                          {showRegisterPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
                     </div>
 
                     {/* All Andhra Pradesh Municipal Cities Selector */}
@@ -566,6 +617,39 @@ export default function LoginPage() {
               )}
 
               <form onSubmit={handleEmployeeSubmit} className="space-y-3.5">
+                {/* 1. Municipality Cadre Selector */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Select Municipality / Town Cadre *
+                    </label>
+                    <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                      Isolated Town Cadre
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={selectedEmpMunicipality}
+                      onChange={(e) => {
+                        setSelectedEmpMunicipality(e.target.value);
+                        setCustomEmpCode('');
+                        setSelectedEmpCode('');
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none pr-8 cursor-pointer"
+                    >
+                      {AP_CORPORATIONS.map(c => (
+                        <option key={c.code} value={c.code}>
+                          {c.short_name} ({c.name}) &bull; {c.district} Dist
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Showing officers strictly dedicated to <strong className="text-teal-700">{selectedEmpMunicipality}</strong> municipality.
+                  </p>
+                </div>
+
+                {/* 2. Employee Code / ID */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Employee Code / ID *
@@ -574,44 +658,76 @@ export default function LoginPage() {
                     type="text"
                     value={customEmpCode}
                     onChange={(e) => {
-                      setCustomEmpCode(e.target.value);
+                      const val = e.target.value;
+                      setCustomEmpCode(val);
                       setSelectedEmpCode('');
+                      // Auto-detect municipality prefix if typed e.g. GVMC-EMP-101
+                      if (val.includes('-')) {
+                        const prefix = val.split('-')[0].toUpperCase();
+                        if (AP_CORPORATIONS.some(c => c.code === prefix) && prefix !== selectedEmpMunicipality) {
+                          setSelectedEmpMunicipality(prefix);
+                        }
+                      }
                     }}
-                    placeholder="e.g. EMP-101 or ELR-EMP-105"
+                    placeholder={`e.g. ${selectedEmpMunicipality}-EMP-101`}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold uppercase text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none"
                   />
                   <div className="mt-1.5">
-                    <span className="text-[11px] text-slate-400 font-medium">Or pick from Cadre roster:</span>
+                    <span className="text-[11px] text-slate-400 font-medium">Or pick from {selectedEmpMunicipality} Cadre roster:</span>
                     <select
                       value={selectedEmpCode}
                       onChange={(e) => {
                         setSelectedEmpCode(e.target.value);
                         setCustomEmpCode('');
                       }}
-                      className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none"
+                      className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer"
                     >
-                      <option value="">-- Choose from Cadre Officers --</option>
+                      <option value="">-- Choose {selectedEmpMunicipality} Cadre Officer --</option>
                       {employees.map(e => (
                         <option key={e.id} value={e.employee_code}>
-                          {e.employee_code} - {e.name} ({e.designation})
+                          [{e.employee_code}] {e.name} — {e.designation}
                         </option>
                       ))}
                     </select>
                   </div>
                 </div>
 
+                {/* 3. Password with Show/Hide Toggle */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Password *
-                  </label>
-                  <input
-                    type="password"
-                    value={employeePassword}
-                    onChange={(e) => setEmployeePassword(e.target.value)}
-                    placeholder="Enter employee password"
-                    required
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Cadre Access Password *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowEmpPassword(!showEmpPassword)}
+                      className="text-[11px] text-teal-600 hover:text-teal-700 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      {showEmpPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+                      <span>{showEmpPassword ? 'Hide password' : 'Show password'}</span>
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showEmpPassword ? 'text' : 'password'}
+                      value={employeePassword}
+                      onChange={(e) => setEmployeePassword(e.target.value)}
+                      placeholder="Enter employee password (default: emp@123)"
+                      required
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowEmpPassword(!showEmpPassword)}
+                      className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      aria-label="Toggle password visibility"
+                    >
+                      {showEmpPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Default cadre password for AP officers: <code className="bg-slate-100 text-teal-700 font-bold px-1 py-0.5 rounded">emp@123</code>
+                  </p>
                 </div>
 
                 <button

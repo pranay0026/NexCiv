@@ -25,8 +25,14 @@ import {
   Clock,
   Check,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Lock,
+  KeyRound,
+  Sparkles
 } from 'lucide-react';
+import { verifyRepairResolutionProof, ResolutionVerificationResult } from '../lib/aiPhase3';
 
 interface ComplaintItem {
   id: string;
@@ -90,11 +96,67 @@ export default function EmployeeWorkspace() {
   const [resolutionProof, setResolutionProof] = useState<string | null>(null);
   const [savingResolution, setSavingResolution] = useState(false);
 
+  // Phase 3 AI Resolution Verification State
+  const [aiVerification, setAiVerification] = useState<ResolutionVerificationResult | null>(null);
+  const [verifyingWithAi, setVerifyingWithAi] = useState(false);
+
+  const runAiVerification = async (proofUrl: string, comp?: ComplaintItem | null) => {
+    setVerifyingWithAi(true);
+    try {
+      const target = comp || editingComplaint;
+      const res = await verifyRepairResolutionProof(null, proofUrl, target?.defectType || target?.category);
+      setAiVerification(res);
+    } catch {}
+    setVerifyingWithAi(false);
+  };
+
   // Settings state
   const [alertSms, setAlertSms] = useState(true);
   const [alertEmail, setAlertEmail] = useState(true);
   const [soundAlert, setSoundAlert] = useState(true);
   const [settingsSaved, setSettingsSaved] = useState(false);
+
+  // Employee Password Management State
+  const [empCurrentPass, setEmpCurrentPass] = useState('');
+  const [empNewPass, setEmpNewPass] = useState('');
+  const [empConfirmPass, setEmpConfirmPass] = useState('');
+  const [showEmpNew, setShowEmpNew] = useState(false);
+  const [showEmpConfirm, setShowEmpConfirm] = useState(false);
+  const [empPassUpdating, setEmpPassUpdating] = useState(false);
+  const [empPassSuccess, setEmpPassSuccess] = useState('');
+  const [empPassError, setEmpPassError] = useState('');
+
+  const handleEmployeeChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmpPassError('');
+    setEmpPassSuccess('');
+    if (!empNewPass || empNewPass.length < 4) {
+      setEmpPassError('New password must be at least 4 characters.');
+      return;
+    }
+    if (empNewPass !== empConfirmPass) {
+      setEmpPassError('New password and confirmation do not match.');
+      return;
+    }
+    setEmpPassUpdating(true);
+    try {
+      const res = await api.changePassword({
+        role: 'employee',
+        identifier: currentEmpCode,
+        oldPassword: empCurrentPass,
+        newPassword: empNewPass
+      });
+      setEmpPassSuccess(res.message || 'Cadre password updated successfully!');
+      setEmpCurrentPass('');
+      setEmpNewPass('');
+      setEmpConfirmPass('');
+      setTimeout(() => setEmpPassSuccess(''), 4000);
+    } catch (err: any) {
+      setEmpPassError(err.message || 'Failed to update cadre password.');
+    } finally {
+      setEmpPassUpdating(false);
+    }
+  };
 
   // Fetch live workspace data from backend
   const fetchLiveWorkspaceData = async () => {
@@ -1291,6 +1353,84 @@ export default function EmployeeWorkspace() {
                       Save Preferences
                     </button>
                   </div>
+
+                  {/* Cadre Security & Password Management */}
+                  <div className="pt-6 border-t border-slate-200 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Lock size={16} className="text-teal-700" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                        Cadre Security & Password Management
+                      </h4>
+                    </div>
+
+                    {empPassSuccess && (
+                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                        <CheckCircle2 size={16} />
+                        <span>{empPassSuccess}</span>
+                      </div>
+                    )}
+
+                    {empPassError && (
+                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
+                        {empPassError}
+                      </div>
+                    )}
+
+                    <form onSubmit={handleEmployeeChangePassword} className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">New Password *</label>
+                          <div className="relative">
+                            <input
+                              type={showEmpNew ? 'text' : 'password'}
+                              required
+                              value={empNewPass}
+                              onChange={(e) => setEmpNewPass(e.target.value)}
+                              placeholder="Minimum 4 characters"
+                              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-xs font-medium focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none pr-9"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowEmpNew(!showEmpNew)}
+                              className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            >
+                              {showEmpNew ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">Confirm New Password *</label>
+                          <div className="relative">
+                            <input
+                              type={showEmpConfirm ? 'text' : 'password'}
+                              required
+                              value={empConfirmPass}
+                              onChange={(e) => setEmpConfirmPass(e.target.value)}
+                              placeholder="Re-enter new password"
+                              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-xs font-medium focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none pr-9"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowEmpConfirm(!showEmpConfirm)}
+                              className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            >
+                              {showEmpConfirm ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={empPassUpdating}
+                        className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <KeyRound size={13} />
+                        <span>{empPassUpdating ? 'Updating...' : 'Update Cadre Password'}</span>
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </div>
             )}
@@ -1385,22 +1525,57 @@ export default function EmployeeWorkspace() {
                     const file = e.target.files?.[0];
                     if (file) {
                       const reader = new FileReader();
-                      reader.onloadend = () => setResolutionProof(reader.result as string);
+                      reader.onloadend = () => {
+                        const resultStr = reader.result as string;
+                        setResolutionProof(resultStr);
+                        runAiVerification(resultStr);
+                      };
                       reader.readAsDataURL(file);
                     }
                   }}
                   className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
                 />
                 {resolutionProof && (
-                  <div className="mt-2.5 relative inline-block">
-                    <img src={resolutionProof} alt="Repair proof" className="w-28 h-28 object-cover rounded-xl border-2 border-emerald-400 shadow-sm" />
-                    <button
-                      type="button"
-                      onClick={() => setResolutionProof(null)}
-                      className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-1 shadow cursor-pointer"
-                    >
-                      <X size={11} />
-                    </button>
+                  <div className="mt-2.5 space-y-2">
+                    <div className="relative inline-block">
+                      <img src={resolutionProof} alt="Repair proof" className="w-28 h-28 object-cover rounded-xl border-2 border-emerald-400 shadow-sm" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResolutionProof(null);
+                          setAiVerification(null);
+                        }}
+                        className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-1 shadow cursor-pointer"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+
+                    {verifyingWithAi && (
+                      <div className="text-xs text-teal-700 font-bold flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-teal-600 border-t-transparent" />
+                        <span>Running Phase 3 Computer Vision Resolution Audit...</span>
+                      </div>
+                    )}
+
+                    {aiVerification && (
+                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs space-y-1.5 animate-fade-in">
+                        <div className="flex items-center justify-between text-emerald-900 font-bold">
+                          <span className="flex items-center gap-1.5">
+                            <Sparkles size={14} className="text-emerald-600" />
+                            <span>Phase 3 AI Resolution Audit</span>
+                          </span>
+                          <span className="bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded text-[10px] font-black">
+                            {aiVerification.qualityGrade} &bull; {aiVerification.confidenceScore}%
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-emerald-800">{aiVerification.auditSummary}</p>
+                        <div className="flex items-center gap-3 text-[10px] text-emerald-700 font-semibold pt-0.5">
+                          <span>Texture Smoothness: {aiVerification.textureSmoothnessScore}%</span>
+                          <span>Defect Edge Reduction: {aiVerification.edgeReductionPercent}%</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

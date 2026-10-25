@@ -17,10 +17,10 @@ except Exception:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import complaints, classify, employees, auth
+from routers import complaints, classify, employees, auth, ai
 from classifier import get_classifier
 
-app = FastAPI(title="NEXCIV API", version="2.0.0")
+app = FastAPI(title="NEXCIV API", version="3.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +34,7 @@ app.include_router(complaints.router)
 app.include_router(classify.router)
 app.include_router(employees.router)
 app.include_router(auth.router)
+app.include_router(ai.router)
 
 @app.on_event("startup")
 async def startup_event():
@@ -42,4 +43,5 @@ async def startup_event():
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "service": "NEXCIV API", "phase": "1 & 2 Live"}
+    return {"status": "ok", "service": "NEXCIV API", "phase": "Phase 1, 2 & 3 Active (AI Dispatch & CV Verification Live)"}
+

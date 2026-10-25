@@ -29,10 +29,18 @@ import {
   Flame,
   ShieldCheck,
   UserPlus,
-  LogOut
+  LogOut,
+  Lock,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Bot,
+  CheckCircle2
 } from 'lucide-react';
 import { api, HotspotCluster, AP_CORPORATIONS, AP_MUNICIPALITIES } from '../lib/api';
+import { saveCustomMunicipalityEmployee } from '../lib/employeesData';
 import { useAuth } from '../context/AuthContext';
+import { recommendSmartDispatch } from '../lib/aiPhase3';
 
 interface EmployeeRecord {
   id: string;
@@ -135,6 +143,49 @@ export default function AnalyticsPortal() {
   // Modals
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [selectedEmployeeReport, setSelectedEmployeeReport] = useState<EmployeeRecord | null>(null);
+
+  // Security Passkey Modal State
+  const [securityModalOpen, setSecurityModalOpen] = useState(false);
+  const [securityNewPass, setSecurityNewPass] = useState('');
+  const [securityConfirmPass, setSecurityConfirmPass] = useState('');
+  const [showSecurityPass, setShowSecurityPass] = useState(false);
+  const [securityUpdating, setSecurityUpdating] = useState(false);
+  const [securitySuccess, setSecuritySuccess] = useState('');
+  const [securityError, setSecurityError] = useState('');
+
+  // Phase 3 AI Smart Dispatch state
+  const [aiDispatchRec, setAiDispatchRec] = useState<any>(null);
+
+  const handleUpdateDepartmentPasskey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSecurityError('');
+    setSecuritySuccess('');
+    if (!securityNewPass || securityNewPass.length < 4) {
+      setSecurityError('Passkey must be at least 4 characters long.');
+      return;
+    }
+    if (securityNewPass !== securityConfirmPass) {
+      setSecurityError('Passkey and confirmation do not match.');
+      return;
+    }
+    setSecurityUpdating(true);
+    const activeCorpCode = selectedCorp && selectedCorp !== 'All' ? selectedCorp : (profile?.departmentCode || 'ELR');
+    try {
+      const res = await api.changePassword({
+        role: 'department',
+        identifier: activeCorpCode,
+        newPassword: securityNewPass
+      });
+      setSecuritySuccess(res.message || 'Department passkey updated successfully!');
+      setSecurityNewPass('');
+      setSecurityConfirmPass('');
+      setTimeout(() => setSecuritySuccess(''), 4000);
+    } catch (err: any) {
+      setSecurityError(err.message || 'Failed to update passkey.');
+    } finally {
+      setSecurityUpdating(false);
+    }
+  };
 
   // Work Queue State
   const [workQueue, setWorkQueue] = useState<WorkItem[]>(INITIAL_WORK_QUEUE);
@@ -602,6 +653,33 @@ export default function AnalyticsPortal() {
       };
 
       setEmployeesList((prev) => [newRecord, ...prev]);
+
+      // Save into isolated municipality cadre
+      saveCustomMunicipalityEmployee(activeMunicipality, {
+        id: `emp-${code.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+        employee_code: code,
+        name: newEmpName.trim(),
+        initials,
+        email: newEmpEmail.trim() || `${code.toLowerCase()}@nexciv.ap.gov.in`,
+        phone: newEmpPhone,
+        municipality_code: activeMunicipality,
+        department: newEmpDept,
+        department_name: wingNames[newEmpDept] || 'Municipal Engineering Division',
+        designation: newEmpDesignation,
+        zone: newEmpZone,
+        status: 'active',
+        assigned_count: 0,
+        completed_count: 0,
+        pending_count: 0,
+        overdue_count: 0,
+        avg_resolution_days: 1.0,
+        completion_rate: 100,
+        rating: 5.0,
+        performance: 'On track',
+        skills: newEmpSkills,
+        password: newEmpPassword || 'emp@123'
+      });
+
       setRegisterSuccess(`Employee ${code} (${newEmpName}) successfully registered into Cadre! They can now log in immediately with their Cadre Code and password.`);
       setTimeout(() => {
         setRegisterEmpModalOpen(false);
@@ -812,6 +890,16 @@ export default function AnalyticsPortal() {
               >
                 <Download size={14} />
                 <span>Export report</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSecurityModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold border border-slate-200 shadow-2xs transition cursor-pointer"
+                title="Municipal Passkey & Department Security Settings"
+              >
+                <KeyRound size={14} className="text-teal-700" />
+                <span>Passkey Settings</span>
               </button>
 
               <button
@@ -1882,6 +1970,50 @@ export default function AnalyticsPortal() {
                 </select>
               </div>
 
+              {/* Phase 3 AI Smart Dispatch Recommendation Trigger */}
+              <button
+                type="button"
+                onClick={() => {
+                  const selCase = assignableItems.find(i => (i.id === assignCaseId || i.code === assignCaseId)) || assignableItems[0];
+                  if (selCase) {
+                    const rec = recommendSmartDispatch({
+                      title: selCase.title,
+                      category: selCase.department,
+                      municipal_corporation: selectedCorp !== 'All' ? selectedCorp : 'ELR',
+                      ward: selCase.location
+                    }, employeesList as any);
+                    setAiDispatchRec(rec);
+                    if (rec.recommendedEmployee) {
+                      setAssignTargetEmp(rec.recommendedEmployee.id || rec.recommendedEmployee.employee_code);
+                    }
+                  }
+                }}
+                className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-teal-500/10 to-emerald-500/10 border border-teal-300 text-teal-800 text-xs font-bold flex items-center justify-center gap-2 hover:bg-teal-50 transition cursor-pointer"
+              >
+                <Sparkles size={14} className="text-teal-600" />
+                <span>Phase 3 AI: Auto-Recommend Cadre Officer & Crew</span>
+              </button>
+
+              {aiDispatchRec && (
+                <div className="p-3 rounded-xl bg-teal-50/70 border border-teal-200 text-xs space-y-1.5 animate-fade-in">
+                  <div className="flex items-center justify-between text-teal-900 font-bold">
+                    <span className="flex items-center gap-1">
+                      <Bot size={13} className="text-teal-600" />
+                      <span>AI Recommended: {aiDispatchRec.recommendedEmployee?.name}</span>
+                    </span>
+                    <span className="bg-teal-200/60 px-1.5 py-0.5 rounded text-[10px] font-black text-teal-800">
+                      {aiDispatchRec.confidenceScore}% Match
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600">{aiDispatchRec.dispatchRationale}</p>
+                  <div className="flex items-center gap-2 text-[10px] text-teal-800 flex-wrap pt-0.5 font-semibold">
+                    <span>SLA: {aiDispatchRec.estimatedSlaHours} hrs</span>
+                    <span>&bull; Crew: {aiDispatchRec.requiredCrewSize} persons</span>
+                    <span>&bull; Equipment: {aiDispatchRec.requiredEquipment?.slice(0, 2).join(', ')}</span>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-2 pt-3">
                 <button
                   type="button"
@@ -1895,6 +2027,103 @@ export default function AnalyticsPortal() {
                   className="px-4 py-2 text-xs font-bold bg-[#0d9488] hover:bg-[#0f766e] text-white rounded-xl shadow-xs"
                 >
                   Confirm Assignment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL: MUNICIPAL PASSKEY & DEPARTMENT SECURITY SETTINGS       */}
+      {/* ============================================================ */}
+      {securityModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center">
+                  <KeyRound size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Passkey & Security Settings</h3>
+                  <p className="text-xs text-slate-500">
+                    Update administrative passkey for <span className="font-bold text-teal-700">{selectedCorp !== 'All' ? selectedCorp : 'Municipality'}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSecurityModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {securitySuccess && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 size={16} />
+                <span>{securitySuccess}</span>
+              </div>
+            )}
+
+            {securityError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
+                {securityError}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateDepartmentPasskey} className="space-y-3.5 pt-2">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">New Administrative Passkey *</label>
+                <div className="relative">
+                  <input
+                    type={showSecurityPass ? 'text' : 'password'}
+                    required
+                    value={securityNewPass}
+                    onChange={(e) => setSecurityNewPass(e.target.value)}
+                    placeholder="Enter new passkey (min 4 characters)"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSecurityPass(!showSecurityPass)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showSecurityPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Confirm New Passkey *</label>
+                <div className="relative">
+                  <input
+                    type={showSecurityPass ? 'text' : 'password'}
+                    required
+                    value={securityConfirmPass}
+                    onChange={(e) => setSecurityConfirmPass(e.target.value)}
+                    placeholder="Re-enter new passkey"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none pr-10"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSecurityModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={securityUpdating}
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <Lock size={13} />
+                  <span>{securityUpdating ? 'Updating...' : 'Save Passkey'}</span>
                 </button>
               </div>
             </form>

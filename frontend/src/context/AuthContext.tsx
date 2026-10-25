@@ -34,7 +34,7 @@ interface AuthContextType {
   signInWithGoogle: (role?: 'citizen' | 'employee', customEmail?: string, customName?: string, municipalityCode?: string, ward?: string, address?: string) => Promise<void>;
   loginAsCitizen: (email?: string, name?: string, phone?: string, municipalCorporation?: string, ward?: string, address?: string) => void;
   loginAsDepartment: (corporationId: string, corporationName?: string, departmentWing?: string) => void;
-  loginAsEmployee: (employeeCode: string, name?: string, department?: string, designation?: string) => void;
+  loginAsEmployee: (employeeCode: string, name?: string, department?: string, designation?: string, municipalityCode?: string) => void;
   updateProfile: (data: Partial<AuthProfile>) => void;
   signOut: () => Promise<void>;
 }
@@ -57,23 +57,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 0. Catch Supabase OAuth redirect errors in production deployment
+    // 0. Catch Supabase OAuth redirect errors in production deployment without setting fake demo profile
     const fullHash = window.location.hash || window.location.search;
     if (fullHash.includes('error=') || fullHash.includes('error_description=')) {
-      console.warn('Deployment OAuth redirect returned notice. Activating verified Google session:', fullHash);
+      console.warn('OAuth redirect returned notice:', fullHash);
       window.history.replaceState(null, '', window.location.pathname);
-      const googleCitizen: AuthProfile = {
-        id: `google-cit-${Date.now()}`,
-        email: 'pranaysai.koppineedi@gmail.com',
-        name: 'Pranay Sai Koppineedi (Google Verified)',
-        phone: '+91 98480 12345',
-        role: 'citizen',
-        department: 'all',
-        departmentName: 'Public Citizen (Google Verified)'
-      };
-      setProfile(googleCitizen);
-      localStorage.setItem('nexciv_token', `token-google-${Date.now()}`);
-      localStorage.setItem('nexciv_profile', JSON.stringify(googleCitizen));
       setLoading(false);
       return;
     }
@@ -204,22 +192,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     employeeCode: string,
     name?: string,
     department = 'road',
-    designation = 'Municipal Engineer'
+    designation = 'Municipal Engineer',
+    municipalityCode?: string
   ) => {
     const cleanCode = employeeCode.trim().toUpperCase();
     const token = `demo-employee-${cleanCode.toLowerCase()}`;
     const deptName = DEPARTMENT_NAMES[department] || 'Municipal Engineering Division';
     const officerName = name || `Officer (${cleanCode})`;
+    const deducedMunicipality = municipalityCode 
+      || (cleanCode.includes('-') && cleanCode.split('-').length >= 3 ? cleanCode.split('-')[0] : 'ELR');
     
     const p: AuthProfile = {
-      id: `emp-${cleanCode.toLowerCase()}`,
-      email: `${cleanCode.toLowerCase()}@nexciv.ap.gov.in`,
+      id: `emp-${cleanCode.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+      email: `${cleanCode.toLowerCase().replace('-', '.')}@nexciv.ap.gov.in`,
       name: officerName,
       role: 'employee',
       employeeCode: cleanCode,
       designation,
       department,
-      departmentName: deptName
+      departmentName: deptName,
+      municipalCorporation: deducedMunicipality,
+      city: deducedMunicipality
     };
     setProfile(p);
     localStorage.setItem('nexciv_token', token);
