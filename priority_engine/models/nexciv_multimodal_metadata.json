@@ -1,0 +1,21 @@
+{
+  "model_architecture": "Multimodal Late-Fusion LightGBM (Text + Image + Zone + Civic SLA)",
+  "modalities": [
+    "Text: Telugu & English TF-IDF NLP representations",
+    "Image: Computer vision damage severity, edge density, contrast, and brightness",
+    "Zone: Hospital, School, Highway, Transit Hub, Ward, GPS coordinates",
+    "Civic: Statutory SLA days, population affected, public health & safety risks"
+  ],
+  "metrics": {
+    "priority_mae": 0.054,
+    "priority_rmse": 0.216,
+    "priority_r2": 0.9999,
+    "cadre_dept_accuracy_pct": 100.0
+  },
+  "dataset_records": 10000,
+  "ablation_comparison": {
+    "text_only_mae": 0.393,
+    "text_plus_zone_mae": 0.393,
+    "full_multimodal_mae": 0.054
+  }
+}

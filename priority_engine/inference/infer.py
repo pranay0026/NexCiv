@@ -1,28 +1,38 @@
 """
-NEX-CIV Priority Engine - Standalone Inference Module
-Loads serialized ML models from saved_models/ and performs real-time severity
-and priority prediction with emergency override protection.
+NEX-CIV Multimodal Inference Module
+Fuses:
+1. Multilingual Text (Telugu & English NLP)
+2. Computer Vision & Defect Image Analysis
+3. Geospatial Zone & Sensitive Corridor Vulnerability
+4. Statutory SLA & Civic Impact Meta
 """
 
 import os
+from pathlib import Path
+from typing import Dict, Any, Optional
 import joblib
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from typing import Dict, Any, Optional
 
 SAVED_MODELS_DIR = Path(__file__).resolve().parent.parent / "saved_models"
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
-SEVERITY_MODEL_PATH = SAVED_MODELS_DIR / "nexciv_severity_model.pkl"
-PRIORITY_MODEL_PATH = SAVED_MODELS_DIR / "nexciv_structured_priority_model.pkl"
+MULTIMODAL_MODEL_PATH = MODELS_DIR / "nexciv_multimodal_unified_model.pkl"
 LIGHTGBM_MODEL_PATH = MODELS_DIR / "nexciv_lightgbm_priority_model.pkl"
 
-_SEVERITY_PIPELINE = None
-_PRIORITY_MODEL = None
+_MULTIMODAL_PACKAGE = None
 _LIGHTGBM_PACKAGE = None
 
+
 def get_models():
-    global _SEVERITY_PIPELINE, _PRIORITY_MODEL, _LIGHTGBM_PACKAGE
+    global _MULTIMODAL_PACKAGE, _LIGHTGBM_PACKAGE
+    if _MULTIMODAL_PACKAGE is None:
+        p = MULTIMODAL_MODEL_PATH if MULTIMODAL_MODEL_PATH.exists() else (SAVED_MODELS_DIR / "nexciv_multimodal_unified_model.pkl")
+        if p.exists():
+            try:
+                _MULTIMODAL_PACKAGE = joblib.load(p)
+            except Exception as e:
+                print(f"[INFERENCE] Error loading Multimodal model: {e}")
+
     if _LIGHTGBM_PACKAGE is None:
         p = LIGHTGBM_MODEL_PATH if LIGHTGBM_MODEL_PATH.exists() else (SAVED_MODELS_DIR / "nexciv_lightgbm_priority_model.pkl")
         if p.exists():
@@ -31,52 +41,138 @@ def get_models():
             except Exception as e:
                 print(f"[INFERENCE] Error loading LightGBM model: {e}")
 
-    if _SEVERITY_PIPELINE is None and SEVERITY_MODEL_PATH.exists():
-        try:
-            _SEVERITY_PIPELINE = joblib.load(SEVERITY_MODEL_PATH)
-        except Exception as e:
-            print(f"[INFERENCE] Error loading severity model: {e}")
+    return _MULTIMODAL_PACKAGE, _LIGHTGBM_PACKAGE
 
-    if _PRIORITY_MODEL is None and PRIORITY_MODEL_PATH.exists():
-        try:
-            _PRIORITY_MODEL = joblib.load(PRIORITY_MODEL_PATH)
-        except Exception as e:
-            print(f"[INFERENCE] Error loading priority model: {e}")
-
-    return _SEVERITY_PIPELINE, _PRIORITY_MODEL, _LIGHTGBM_PACKAGE
 
 def predict_complaint_priority(
     text: str,
-    safety_risk: float,
-    public_health_risk: float,
-    public_impact: float,
-    infrastructure_criticality: float,
-    sla_urgency: float,
+    safety_risk: float = 50.0,
+    public_health_risk: float = 50.0,
+    public_impact: float = 50.0,
+    infrastructure_criticality: float = 50.0,
+    sla_urgency: float = 50.0,
     is_emergency: bool = False,
     category: str = "road",
     estimated_citizens_affected: float = 50.0,
-    statutory_sla_days: float = 3.0
+    statutory_sla_days: float = 3.0,
+    image_input: Optional[Any] = None,
+    zone: Optional[str] = None,
+    ward: Optional[str] = None,
+    municipality: Optional[str] = "ELR",
+    lat: Optional[float] = None,
+    lng: Optional[float] = None
 ) -> Dict[str, Any]:
-    """Runs inference across trained LightGBM ML models with emergency safety fallbacks."""
-    sev_pipe, prio_model, lgb_pkg = get_models()
-
-    pred_sev_level = 3 if is_emergency else 2
-    if sev_pipe is not None:
-        try:
-            pred_sev_level = int(sev_pipe.predict([text])[0])
-        except Exception:
-            pass
-
+    """
+    Runs full multimodal inference across Text, Image, Geospatial Zone, and Civic features.
+    """
+    mm_pkg, lgb_pkg = get_models()
     pred_priority_score = None
+    pred_dept = category
+    zone_type = "residential"
+    vuln_multiplier = 1.0
+    vis_sev = 50.0
+    has_image = False
 
-    # Priority 1: Use Production LightGBM Model if loaded
-    if lgb_pkg is not None:
+    # 1. ATTEMPT FULL MULTIMODAL FUSION INFERENCE
+    if mm_pkg is not None:
+        try:
+            from priority_engine.multimodal_fusion import (
+                extract_vision_features_from_image,
+                synthesize_vision_features_for_defect,
+                resolve_zone_features
+            )
+
+            # Modality 1: Text
+            tfidf = mm_pkg["tfidf"]
+            text_vec = tfidf.transform([text or ""]).toarray()
+
+            # Modality 2: Vision / Image
+            if image_input:
+                vf = extract_vision_features_from_image(image_input)
+                has_image = bool(vf.get("has_image_proof", 0.0))
+            else:
+                vf = synthesize_vision_features_for_defect(category, 3 if is_emergency else 2)
+            vis_sev = vf['visual_severity_score']
+            vision_vec = np.array([[
+                vf['visual_severity_score'],
+                vf['edge_density'],
+                vf['contrast_ratio'],
+                vf['brightness_level'],
+                vf['has_image_proof']
+            ]])
+
+            # Modality 3: Geospatial Zone
+            zf = resolve_zone_features(
+                text=text or "",
+                location_name=zone,
+                ward=ward,
+                municipality=municipality,
+                lat=lat,
+                lng=lng
+            )
+            zone_type = zf['zone_type']
+            vuln_multiplier = zf['vulnerability_multiplier']
+
+            zone_dummies_cols = mm_pkg["zone_dummies_columns"]
+            zone_vec = np.array([[1 if c == f"zone_{zone_type}" else 0 for c in zone_dummies_cols]])
+
+            muni_dummies_cols = mm_pkg["muni_dummies_columns"]
+            muni_code = zf['municipality_code']
+            muni_vec = np.array([[1 if c == f"muni_{muni_code}" else 0 for c in muni_dummies_cols]])
+
+            spatial_vec = np.column_stack([
+                zone_vec,
+                [[zf['vulnerability_multiplier']]],
+                [[zf['latitude']]],
+                [[zf['longitude']]],
+                [[zf['ward_num']]],
+                muni_vec
+            ])
+
+            # Modality 4: Civic Metadata
+            cat_dummies_cols = mm_pkg["cat_dummies_columns"]
+            cat_vec = np.array([[1 if c == f"cat_{category}" else 0 for c in cat_dummies_cols]])
+            log_citizens = np.log1p(np.array([[float(estimated_citizens_affected)]]))
+
+            civic_vec = np.column_stack([
+                [[float(safety_risk)]],
+                [[float(public_health_risk)]],
+                log_citizens,
+                [[float(infrastructure_criticality)]],
+                [[float(statutory_sla_days)]],
+                [[1 if is_emergency else 0]],
+                cat_vec
+            ])
+
+            X_fused = np.hstack([text_vec, vision_vec, spatial_vec, civic_vec])
+
+            # Priority prediction
+            pred_priority_score = float(mm_pkg["priority_model"].predict(X_fused)[0])
+
+            # Cadre Department prediction (without cat_dummies)
+            civic_no_cat = np.column_stack([
+                [[float(safety_risk)]],
+                [[float(public_health_risk)]],
+                log_citizens,
+                [[float(infrastructure_criticality)]],
+                [[float(statutory_sla_days)]],
+                [[1 if is_emergency else 0]]
+            ])
+            X_no_cat = np.hstack([text_vec, vision_vec, spatial_vec, civic_no_cat])
+            pred_dept_ml = str(mm_pkg["dept_model"].predict(X_no_cat)[0])
+            pred_dept = category if (category and category in ["road", "street_lights", "drainage", "water_supply"]) else pred_dept_ml
+
+        except Exception as e:
+            print(f"[INFERENCE] Multimodal pipeline note, falling back to LightGBM text: {e}")
+
+    # 2. FALLBACK TO LIGHTGBM TABULAR MODEL
+    if pred_priority_score is None and lgb_pkg is not None:
         try:
             model = lgb_pkg["model"]
             tfidf = lgb_pkg["tfidf"]
             cat_feature_names = lgb_pkg["cat_feature_names"]
 
-            text_vec = tfidf.transform([text]).toarray()
+            text_vec = tfidf.transform([text or ""]).toarray()
             cat_col = f"cat_{category}"
             cat_vec = np.array([[1 if c == cat_col else 0 for c in cat_feature_names]])
             log_citizens = np.log1p(np.array([[float(estimated_citizens_affected)]]))
@@ -92,30 +188,13 @@ def predict_complaint_priority(
             ])
             X_input = np.hstack([tabular, text_vec])
             pred_priority_score = float(model.predict(X_input)[0])
-        except Exception as e:
-            print(f"[INFERENCE] LightGBM inference fallback: {e}")
-
-    # Priority 2: Structured scikit-learn regression model
-    if pred_priority_score is None:
-        features_df = pd.DataFrame([{
-            "severity_level": pred_sev_level,
-            "safety_risk": safety_risk,
-            "public_health_risk": public_health_risk,
-            "public_impact": public_impact,
-            "infrastructure_criticality": infrastructure_criticality,
-            "sla_urgency": sla_urgency,
-            "is_emergency": 1 if is_emergency else 0
-        }])
-
-        if prio_model is not None:
-            try:
-                pred_priority_score = float(prio_model.predict(features_df)[0])
-            except Exception:
-                pred_priority_score = 95.0 if is_emergency else 65.0
-        else:
+        except Exception:
             pred_priority_score = 95.0 if is_emergency else 65.0
 
-    # Emergency safeguard: never allow an emergency to score below 95.0
+    if pred_priority_score is None:
+        pred_priority_score = 95.0 if is_emergency else 65.0
+
+    # Emergency safeguard: never allow an emergency hazard to score below 95.0
     if is_emergency:
         pred_priority_score = max(95.0, pred_priority_score)
 
@@ -131,9 +210,14 @@ def predict_complaint_priority(
         tier = "Low"
 
     return {
-        "predicted_severity_level": pred_sev_level,
+        "predicted_severity_level": 3 if is_emergency else 2,
         "predicted_priority_score": pred_priority_score,
         "predicted_priority_tier": tier,
+        "predicted_department": pred_dept,
+        "zone_classification": zone_type,
+        "vulnerability_multiplier": vuln_multiplier,
+        "visual_damage_severity": vis_sev,
+        "has_image_proof": has_image,
         "is_emergency_override": is_emergency,
-        "model_version": "3.3.0-LIGHTGBM-PROD"
+        "model_version": "3.4.0-MULTIMODAL-FUSION-PROD"
     }

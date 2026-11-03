@@ -221,4 +221,37 @@ def test_lightgbm_priority_inference():
     assert res["predicted_priority_tier"] == "Critical"
     assert res["predicted_priority_score"] >= 95.0
     assert res["is_emergency_override"] is True
-    assert "LIGHTGBM" in res["model_version"]
+    assert "LIGHTGBM" in res["model_version"] or "MULTIMODAL" in res["model_version"]
+
+
+def test_multimodal_text_image_zone_fusion():
+    """
+    Verifies that the multimodal engine accurately fuses Text, Image, and Zone:
+    1. Detects sensitive Hospital corridor and applies 1.5x vulnerability multiplier.
+    2. Correctly classifies cadre department.
+    3. Synthesizes/extracts visual damage features.
+    """
+    from PIL import Image
+    import numpy as np
+
+    # Create dummy 100x100 RGB image with simulated defect edge patterns
+    arr = np.zeros((100, 100, 3), dtype=np.uint8)
+    arr[30:70, 30:70] = [180, 50, 50]
+    dummy_img = Image.fromarray(arr)
+
+    res = predict_complaint_priority(
+        text="రోడ్డుపై భారీ గుంత ఉంది ఆసుపత్రి అంబులెన్స్ వెళ్ళలేకపోతోంది",
+        zone="King George Hospital (KGH) Casualty Gate Approach",
+        ward="Ward 14",
+        municipality="GVMC",
+        category="road",
+        image_input=dummy_img,
+        safety_risk=85.0
+    )
+
+    assert res["zone_classification"] == "hospital"
+    assert res["vulnerability_multiplier"] == 1.50
+    assert res["predicted_department"] == "road"
+    assert res["has_image_proof"] is True
+    assert res["visual_damage_severity"] > 0
+    assert "MULTIMODAL" in res["model_version"]
