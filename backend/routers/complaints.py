@@ -813,6 +813,12 @@ def list_complaints(
         if mid not in existing_ids:
             results.append(m)
 
+    # Enforce municipality isolation for employee role unless overridden by query param
+    if current_user and current_user.get('role') == 'employee':
+        user_muni = current_user.get('municipalityCode') or current_user.get('municipality_code')
+        if user_muni:
+            results = [c for c in results if c.get('municipal_corporation') == user_muni]
+    # Allow explicit query param to override (e.g., admin dashboards)
     if municipal_corporation and municipal_corporation.lower() != 'all':
         target_corp = municipal_corporation.strip().upper()
         from data_manager import get_isolated_municipality_complaints
@@ -854,7 +860,17 @@ def list_complaints(
             continue
         if status and status.lower() != 'all' and c_stat != status.lower():
             continue
-        if municipal_corporation and municipal_corporation.lower() != 'all':
+        // Enforce municipality isolation for employee role unless overridden by query param
+    if current_user and current_user.get('role') == 'employee':
+        user_muni = current_user.get('municipalityCode') or current_user.get('municipality_code')
+        if user_muni:
+            results = [c for c in results if c.get('municipal_corporation') == user_muni]
+    # Allow explicit query param to override (e.g., admin dashboards)
+    if municipal_corporation and municipal_corporation.lower() != 'all':
+        target_corp = municipal_corporation.strip().upper()
+        from data_manager import get_isolated_municipality_complaints
+        try:
+            results = get_isolated_municipality_complaints(target_corp)
             target_corp = municipal_corporation.strip().upper()
             if c_corp != target_corp and target_corp not in c_addr:
                 continue
@@ -918,7 +934,17 @@ def get_analytics(
         if m.get("id") not in existing_ids:
             all_items.append(m)
 
+    // Enforce municipality isolation for employee role unless overridden by query param
+    if current_user and current_user.get('role') == 'employee':
+        user_muni = current_user.get('municipalityCode') or current_user.get('municipality_code')
+        if user_muni:
+            results = [c for c in results if c.get('municipal_corporation') == user_muni]
+    # Allow explicit query param to override (e.g., admin dashboards)
     if municipal_corporation and municipal_corporation.lower() != 'all':
+        target_corp = municipal_corporation.strip().upper()
+        from data_manager import get_isolated_municipality_complaints
+        try:
+            results = get_isolated_municipality_complaints(target_corp)
         target_mc = municipal_corporation.strip().upper()
         from data_manager import get_isolated_municipality_complaints
         try:

@@ -1,0 +1,16 @@
+{
+  "weights": {
+    "severity": 0.25,
+    "safety_risk": 0.20,
+    "public_impact": 0.15,
+    "sla_urgency": 0.20,
+    "infrastructure": 0.10,
+    "recurrence": 0.10
+  },
+  "thresholds": {
+    "critical": 80,
+    "high": 60,
+    "medium": 40,
+    "low": 0
+  }
+}
