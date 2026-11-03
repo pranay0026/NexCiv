@@ -37,6 +37,7 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
   const [isListening, setIsListening] = useState(false);
   const [activeSpeechField, setActiveSpeechField] = useState<'title' | 'description' | null>(null);
   const recognitionRef = useRef<any>(null);
+  const baseTextRef = useRef<string>('');
 
   // AP Municipal Details
   const [corporations, setCorporations] = useState<APCorporation[]>(AP_CORPORATIONS);
@@ -140,10 +141,10 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
     setActiveSpeechField(null);
   };
 
-  const startListening = (targetField: 'title' | 'description') => {
+  const startListening = (targetField: 'title' | 'description' = 'description') => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setError('Speech recognition is not supported in this browser. Please use Chrome, Edge, or mobile browser, or type in Telugu / English.');
+      setError('Speech recognition is not supported in this browser. Please use Google Chrome, Edge, or mobile browser, or type directly in Telugu / English.');
       return;
     }
 
@@ -152,6 +153,7 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
       return;
     }
 
+    baseTextRef.current = targetField === 'title' ? title : description;
     setError('');
     try {
       const recognition = new SpeechRecognition();
@@ -166,32 +168,29 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
       };
 
       recognition.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          transcript += event.results[i][0].transcript;
+        let currentTranscript = '';
+        for (let i = 0; i < event.results.length; ++i) {
+          currentTranscript += event.results[i][0].transcript;
         }
 
+        const combined = baseTextRef.current.trim()
+          ? `${baseTextRef.current.trim()} ${currentTranscript}`
+          : currentTranscript;
+
         if (targetField === 'title') {
-          setTitle((prev) => {
-            const trimmed = prev.trim();
-            return trimmed ? `${trimmed} ${transcript}` : transcript;
-          });
+          setTitle(combined);
         } else {
-          setDescription((prev) => {
-            const trimmed = prev.trim();
-            const updated = trimmed ? `${trimmed} ${transcript}` : transcript;
-            if (updated.length >= 8) {
-              runClassification(updated, images[0] || null, location, locationLat, locationLng);
-            }
-            return updated;
-          });
+          setDescription(combined);
+          if (combined.length >= 8) {
+            runClassification(combined, images[0] || null, location, locationLat, locationLng);
+          }
         }
       };
 
       recognition.onerror = (event: any) => {
-        console.warn('Speech recognition error:', event.error);
+        console.warn('Speech recognition notice:', event.error);
         if (event.error !== 'no-speech') {
-          setError(`Microphone Notice: ${event.error === 'not-allowed' ? 'Microphone permission denied. Please allow microphone access.' : event.error}`);
+          setError(`Microphone Notice: ${event.error === 'not-allowed' ? 'Microphone permission denied. Please allow microphone access in your browser settings.' : event.error}`);
         }
         stopListening();
       };
@@ -216,6 +215,13 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
   // ==================== CAMERA CAPTURE (WEBCAM & MOBILE CAMERA) ====================
   const openCameraModal = async () => {
     setError('');
+
+    // If mediaDevices is unavailable (e.g. non-HTTPS mobile), fallback directly to camera input
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      cameraInputRef.current?.click();
+      return;
+    }
+
     setCameraModalOpen(true);
     setCameraLoading(true);
 
@@ -240,7 +246,7 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
       console.warn('Live camera stream error, falling back to camera file input:', err);
       setCameraLoading(false);
       setCameraModalOpen(false);
-      // Fallback directly to mobile camera capture input
+      // Fallback directly to native mobile camera capture input
       cameraInputRef.current?.click();
     }
   };
@@ -640,6 +646,56 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
         </div>
       </div>
 
+      {/* Dedicated Multimodal Quick Action Bar (Camera & Microphone) */}
+      <div className="mb-4 p-4 bg-gradient-to-r from-teal-50 via-emerald-50/40 to-indigo-50 dark:from-teal-950/40 dark:via-gray-800 dark:to-indigo-950/40 border border-teal-200 dark:border-teal-800/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center shadow-xs shrink-0">
+            <Sparkles size={20} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black text-slate-900 dark:text-white">
+                స్మార్ట్ మల్టీమోడల్ నమోదు &bull; Smart Multimodal Registration
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300">
+                Voice + Camera
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+              ఫోటో తీయండి లేదా మైక్‌లో తెలుగు/English లో మాట్లాడండి — AI స్వయంచాలకంగా డిపార్ట్‌మెంట్‌ను వర్గీకరిస్తుంది.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* 1. Large Camera Capture Button */}
+          <button
+            type="button"
+            onClick={openCameraModal}
+            className="px-4 py-2.5 rounded-xl text-xs font-black bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 flex items-center gap-2 transition cursor-pointer shadow-xs active:scale-95"
+            title="Open camera to capture civic damage photo"
+          >
+            <Camera size={16} className="text-teal-400 dark:text-teal-600" />
+            <span>కెమెరా (Open Camera)</span>
+          </button>
+
+          {/* 2. Large Microphone Speak Button */}
+          <button
+            type="button"
+            onClick={() => isListening ? stopListening() : startListening('description')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition cursor-pointer shadow-xs active:scale-95 ${
+              isListening
+                ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse'
+                : 'bg-teal-600 hover:bg-teal-700 text-white'
+            }`}
+            title="Click to speak and dictate complaint in Telugu or English"
+          >
+            {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+            <span>{isListening ? 'ఆపండి (Stop Mic)' : 'మైక్ మాట్లాడండి (Speak)'}</span>
+          </button>
+        </div>
+      </div>
+
       {/* Voice Recording Active Pulsing Banner */}
       {isListening && (
         <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-700 rounded-xl flex items-center justify-between gap-3 text-rose-900 dark:text-rose-200 animate-pulse shadow-xs">
@@ -938,23 +994,49 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
                 <button
                   type="button"
                   onClick={openCameraModal}
-                  className="aspect-square border-2 border-dashed border-teal-300 dark:border-teal-700/80 hover:border-teal-500 rounded-xl flex flex-col items-center justify-center gap-1 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950/30 transition p-2 text-center cursor-pointer bg-teal-50/40"
+                  className="aspect-square border-2 border-dashed border-teal-500 hover:border-teal-600 rounded-xl flex flex-col items-center justify-center gap-1 text-teal-800 dark:text-teal-200 hover:bg-teal-100/60 dark:hover:bg-teal-950/50 transition p-2 text-center cursor-pointer bg-teal-50/70 shadow-xs group"
                 >
-                  <Camera size={18} className="text-teal-600" />
-                  <span className="text-[10px] font-bold">కెమెరా (Camera)</span>
+                  <div className="w-7 h-7 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-2xs group-hover:scale-110 transition">
+                    <Camera size={15} />
+                  </div>
+                  <span className="text-[11px] font-black text-teal-900 dark:text-teal-200">కెమెరా (Camera)</span>
+                  <span className="text-[9px] text-teal-700 dark:text-teal-400 font-semibold">Live Snap</span>
                 </button>
 
                 {/* 2. Choose File from Gallery Button */}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="aspect-square border-2 border-dashed border-slate-300 dark:border-gray-600 hover:border-teal-500 rounded-xl flex flex-col items-center justify-center gap-1 text-slate-600 dark:text-gray-400 hover:text-teal-600 transition bg-slate-50 dark:bg-gray-900/50 p-2 text-center cursor-pointer"
+                  className="aspect-square border-2 border-dashed border-slate-300 dark:border-gray-600 hover:border-teal-500 rounded-xl flex flex-col items-center justify-center gap-1 text-slate-600 dark:text-gray-400 hover:text-teal-600 transition bg-slate-50 dark:bg-gray-900/50 p-2 text-center cursor-pointer group"
                 >
-                  <Plus size={18} className="text-teal-600" />
-                  <span className="text-[10px] font-bold">గ్యాలరీ (Upload)</span>
+                  <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-gray-800 text-slate-700 dark:text-gray-300 flex items-center justify-center shadow-2xs group-hover:bg-teal-100 group-hover:text-teal-700 transition">
+                    <Plus size={15} />
+                  </div>
+                  <span className="text-[11px] font-bold">గ్యాలరీ (Upload)</span>
+                  <span className="text-[9px] text-slate-400 font-semibold">Choose File</span>
                 </button>
               </>
             )}
+          </div>
+
+          {/* Quick Direct Camera Action Strip */}
+          <div className="flex items-center gap-2 mt-2.5">
+            <button
+              type="button"
+              onClick={openCameraModal}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 text-xs font-bold hover:bg-teal-100 transition cursor-pointer"
+            >
+              <Camera size={13} className="text-teal-600" />
+              <span>📷 కెమెరాతో ఫోటో తీయండి (Open Camera)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-gray-800 text-slate-700 dark:text-gray-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-gray-700 transition cursor-pointer"
+            >
+              <Video size={13} className="text-slate-500" />
+              <span>ఫోన్ కెమెరా (Mobile Camera)</span>
+            </button>
           </div>
 
           {/* Computer Vision Feedback */}
