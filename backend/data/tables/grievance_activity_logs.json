@@ -1,5 +1,57 @@
 [
   {
+    "id": "04e4411a-f94f-4413-91a8-59a02cdaba6a",
+    "complaint_id": "83d59df5-8e71-41be-9c47-e3b68f38c7c4",
+    "actor_role": "system",
+    "actor_id": "system",
+    "actor_name": "AI Legal Triage Engine",
+    "action": "Legal Applicability & SLA Assigned",
+    "previous_status": null,
+    "new_status": "pending",
+    "comments": "Governing source: AP Municipal Corporation Citizen Charter & PGRS Guidelines. Expected resolution: 11 Nov 2026, 05:30 PM.",
+    "metadata": {},
+    "created_at": "2026-11-03T17:15:13.060681Z"
+  },
+  {
+    "id": "e806cc4f-c012-4eff-b2ee-63f7da4058de",
+    "complaint_id": "83d59df5-8e71-41be-9c47-e3b68f38c7c4",
+    "actor_role": "citizen",
+    "actor_id": "system",
+    "actor_name": "S. Rajesh Kumar",
+    "action": "Grievance Registered",
+    "previous_status": null,
+    "new_status": "pending",
+    "comments": "Reference: AP-ELR-2026-NXC9186. Workflow: ordinary_grievance. Mode: Public Portal.",
+    "metadata": {},
+    "created_at": "2026-11-03T17:15:12.879541Z"
+  },
+  {
+    "id": "b09cbcb5-4e18-46cf-aae0-29ab1bd91768",
+    "complaint_id": "297282d0-10e2-471a-af4e-de42f7ffe964",
+    "actor_role": "system",
+    "actor_id": "system",
+    "actor_name": "AI Legal Triage Engine",
+    "action": "Legal Applicability & SLA Assigned",
+    "previous_status": null,
+    "new_status": "pending",
+    "comments": "Governing source: AP Municipal Corporation Citizen Charter & PGRS Guidelines. Expected resolution: 11 Nov 2026, 05:30 PM.",
+    "metadata": {},
+    "created_at": "2026-11-03T17:14:37.748996Z"
+  },
+  {
+    "id": "c1f0f658-63f5-44af-9c63-8b9691c69eca",
+    "complaint_id": "297282d0-10e2-471a-af4e-de42f7ffe964",
+    "actor_role": "citizen",
+    "actor_id": "system",
+    "actor_name": "S. Rajesh Kumar",
+    "action": "Grievance Registered",
+    "previous_status": null,
+    "new_status": "pending",
+    "comments": "Reference: AP-ELR-2026-NXC7319. Workflow: ordinary_grievance. Mode: Public Portal.",
+    "metadata": {},
+    "created_at": "2026-11-03T17:14:37.561028Z"
+  },
+  {
     "id": "0717d0ea-712d-414c-b14e-d69dd05e94cb",
     "complaint_id": "f18412c0-4de9-4449-aa03-9aec6c1f6dd0",
     "actor_role": "employee",

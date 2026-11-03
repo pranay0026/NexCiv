@@ -10,6 +10,7 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 class DispatchRequest(BaseModel):
     complaint: Dict[str, Any]
+    candidate_employees: Optional[List[Dict[str, Any]]] = None
 
 class ResolutionVerifyRequest(BaseModel):
     before_image: Optional[str] = None
@@ -26,7 +27,9 @@ def recommend_dispatch_endpoint(payload: DispatchRequest):
     """
     complaint = payload.complaint
     corp = complaint.get("municipal_corporation") or "ELR"
-    employees = get_employees_by_municipality(corp)
+    employees = payload.candidate_employees
+    if not employees:
+        employees = get_employees_by_municipality(corp)
     if not employees:
         employees = _MEMORY_EMPLOYEES
 

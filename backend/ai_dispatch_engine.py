@@ -61,9 +61,14 @@ class AiPhase3Engine:
 
         result = recommend_cadre_dispatch_single(complaint, candidate_employees)
 
-        emp = result.get("assigned_employee") or {}
+        emp = dict(result.get("assigned_employee") or {})
+        target_dept = result.get("department") or "street_lights"
         emp_code = result.get("assigned_employee_id") or emp.get("employee_code") or emp.get("id") or "UNASSIGNED"
         emp_name = result.get("assigned_employee_name") or emp.get("name") or "Municipal Cadre Officer"
+        emp["department"] = emp.get("department") or emp.get("functional_wing_id") or target_dept
+        emp["employee_code"] = emp_code
+        emp["id"] = emp.get("id") or emp_code
+        emp["designation"] = emp.get("designation") or result.get("statutory_rank") or "Cadre Officer"
         priority = complaint.get("priority") or "Medium"
         priority_label = "Emergency Immediate" if priority == "Critical" else "High Fast-Track" if priority == "High" else "Standard Schedule"
 
@@ -71,12 +76,19 @@ class AiPhase3Engine:
             "recommended_employee": emp,
             "recommended_employee_code": emp_code,
             "recommended_employee_name": emp_name,
+            "department": target_dept,
             "confidence_score": result.get("confidence_score", 90.0),
+            "confidenceScore": result.get("confidence_score", 90.0),
             "dispatch_rationale": result.get("rationale", ""),
+            "dispatchRationale": result.get("rationale", ""),
             "estimated_sla_hours": result.get("estimated_sla_hours", 12),
+            "estimatedSlaHours": result.get("estimated_sla_hours", 12),
             "required_equipment": result.get("required_equipment", []),
+            "requiredEquipment": result.get("required_equipment", []),
             "required_crew_size": result.get("required_crew_size", 2),
-            "dispatch_priority": priority_label
+            "requiredCrewSize": result.get("required_crew_size", 2),
+            "dispatch_priority": priority_label,
+            "dispatchPriority": priority_label
         }
 
     @staticmethod
@@ -116,13 +128,21 @@ class AiPhase3Engine:
 
         return {
             "is_verified_resolved": True,
+            "isVerifiedResolved": True,
             "confidence_score": confidence,
+            "confidenceScore": confidence,
             "defect_cleared": True,
+            "defectCleared": True,
             "quality_grade": quality_grade,
+            "qualityGrade": quality_grade,
             "texture_smoothness_score": smoothness,
+            "textureSmoothnessScore": smoothness,
             "edge_reduction_percent": edge_reduction,
+            "edgeReductionPercent": edge_reduction,
             "audit_summary": summary,
-            "evaluated_at": evaluated_at
+            "auditSummary": summary,
+            "evaluated_at": evaluated_at,
+            "evaluatedAt": evaluated_at
         }
 
     @staticmethod
@@ -180,10 +200,17 @@ class AiPhase3Engine:
 
         return {
             "risk_score": risk_score,
+            "riskScore": risk_score,
             "risk_level": risk_level,
+            "riskLevel": risk_level,
             "sla_breach_probability": sla_prob,
+            "slaBreachProbability": sla_prob,
             "elapsed_hours": round(elapsed_hours, 1),
+            "elapsedHours": round(elapsed_hours, 1),
             "hours_remaining": hours_remaining,
+            "hoursRemaining": hours_remaining,
             "recommended_action": action,
-            "auto_escalation_triggered": triggered
+            "recommendedAction": action,
+            "auto_escalation_triggered": triggered,
+            "autoEscalationTriggered": triggered
         }

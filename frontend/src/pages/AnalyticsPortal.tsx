@@ -54,13 +54,15 @@ import {
 } from '../lib/api';
 import { saveCustomMunicipalityEmployee } from '../lib/employeesData';
 import { useAuth } from '../context/AuthContext';
-import { recommendSmartDispatch } from '../lib/aiPhase3';
+import { recommendSmartDispatch, normalizeDeptKey } from '../lib/aiPhase3';
 
 interface EmployeeRecord {
   id: string;
+  employee_code?: string;
   name: string;
   initials: string;
   department: string;
+  designation?: string;
   assigned: number;
   completed: number;
   pending: number;
@@ -365,19 +367,30 @@ export default function AnalyticsPortal() {
     api.getEmployees({ municipality_code: corpFilter })
       .then((data: any[]) => {
         if (data && data.length > 0) {
-          const mapped: EmployeeRecord[] = data.map((e: any) => ({
-            id: e.employee_code || e.id,
-            name: e.name,
-            initials: e.initials || e.name.slice(0, 2).toUpperCase(),
-            department: (e.department || 'Roads').replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
-            assigned: e.assigned_count ?? 0,
-            completed: e.completed_count ?? 0,
-            pending: e.pending_count ?? 0,
-            overdue: e.overdue_count ?? 0,
-            avgResolution: e.avg_resolution_days ? `${e.avg_resolution_days} days` : '0 days',
-            completionRate: e.completion_rate ? Math.round(e.completion_rate) : 100,
-            performance: (e.performance as any) || 'On track'
-          }));
+          const mapped: EmployeeRecord[] = data.map((e: any) => {
+            const empCode = e.employee_code || e.id;
+            return {
+              ...e,
+              id: empCode,
+              employee_code: empCode,
+              name: e.name,
+              initials: e.initials || e.name.slice(0, 2).toUpperCase(),
+              department: (e.department || 'Roads').replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+              department_raw: e.department,
+              designation: e.designation || e.role || 'Cadre Officer',
+              skills: e.skills || '',
+              rating: e.rating || 4.8,
+              zone: e.zone || '',
+              municipality_code: e.municipality_code || selectedCorp,
+              assigned: e.assigned_count ?? 0,
+              completed: e.completed_count ?? 0,
+              pending: e.pending_count ?? 0,
+              overdue: e.overdue_count ?? 0,
+              avgResolution: e.avg_resolution_days ? `${e.avg_resolution_days} days` : '0 days',
+              completionRate: e.completion_rate ? Math.round(e.completion_rate) : 100,
+              performance: (e.performance as any) || 'On track'
+            };
+          });
           setEmployeesList(mapped);
           if (mapped[0]) setAssignTargetEmp(mapped[0].id);
         } else {
@@ -472,6 +485,11 @@ export default function AnalyticsPortal() {
             return {
               id: c.id,
               title: c.title,
+              description: c.description || '',
+              defectType: c.defect_type || '',
+              priority: c.priority || 'Medium',
+              municipalCorporation: c.municipal_corporation || selectedCorp || 'ELR',
+              ward: c.ward || '1',
               code: shortCode,
               location: locationStr,
               assignedTo: c.assigned_employee_id || c.assigned_team || 'Awaiting assignment',
@@ -2633,7 +2651,10 @@ export default function AnalyticsPortal() {
                 </label>
                 <select
                   value={assignCaseId}
-                  onChange={(e) => setAssignCaseId(e.target.value)}
+                  onChange={(e) => {
+                    setAssignCaseId(e.target.value);
+                    setAiDispatchRec(null);
+                  }}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 font-semibold text-slate-800"
                 >
                   {assignableItems.length === 0 ? (
@@ -2669,17 +2690,23 @@ export default function AnalyticsPortal() {
                 onClick={async () => {
                   const selCase = assignableItems.find(i => (i.id === assignCaseId || i.code === assignCaseId)) || assignableItems[0];
                   if (selCase) {
-                    const muniCode = selectedCorp !== 'All' ? selectedCorp : (profile?.role === 'department' ? profile.departmentCode : 'ELR');
+                    const muniCode = (selCase as any).municipalCorporation || (selectedCorp !== 'All' ? selectedCorp : (profile?.role === 'department' ? profile.departmentCode : 'ELR'));
+                    const fullText = `${selCase.title || ''} ${(selCase as any).description || ''} ${(selCase as any).defectType || ''}`;
+                    const targetDept = normalizeDeptKey(selCase.category || selCase.department, fullText);
+
                     // 1. Try Backend Google OR-Tools CP-SAT Dispatch API
                     try {
                       const backendRec = await api.recommendDispatch({
                         id: selCase.id,
                         grievance_ref_number: selCase.code,
                         title: selCase.title,
-                        category: selCase.category || selCase.department,
-                        department: selCase.department,
+                        description: (selCase as any).description,
+                        category: targetDept,
+                        department: targetDept,
                         municipal_corporation: muniCode,
-                        ward: selCase.location
+                        ward: (selCase as any).ward || selCase.location,
+                        priority: (selCase as any).priority || 'Medium',
+                        candidate_employees: employeesList
                       });
                       if (backendRec && (backendRec.recommended_employee_code || backendRec.recommended_employee)) {
                         const empObj = backendRec.recommended_employee || {};
@@ -2690,7 +2717,7 @@ export default function AnalyticsPortal() {
                             id: empId,
                             employee_code: empId,
                             name: backendRec.recommended_employee_name || empObj.name,
-                            department: backendRec.department || empObj.department,
+                            department: backendRec.department || empObj.department || targetDept,
                             designation: empObj.designation || 'Cadre Officer'
                           },
                           confidenceScore: backendRec.confidence_score,
@@ -2700,7 +2727,9 @@ export default function AnalyticsPortal() {
                           requiredCrewSize: backendRec.required_crew_size,
                           dispatchPriority: backendRec.dispatch_priority
                         });
-                        if (empId) setAssignTargetEmp(empId);
+                        const matchedEmp = employeesList.find(e => e.id === empId || e.employee_code === empId || (e as any).id === empId);
+                        if (matchedEmp) setAssignTargetEmp(matchedEmp.id);
+                        else if (empId) setAssignTargetEmp(empId);
                         return;
                       }
                     } catch (e) {
@@ -2709,15 +2738,22 @@ export default function AnalyticsPortal() {
 
                     // 2. Client-Side Cadre CP-SAT Optimization Fallback
                     const rec = recommendSmartDispatch({
+                      id: selCase.id,
+                      grievance_ref_number: selCase.code,
                       title: selCase.title,
-                      category: selCase.category || selCase.department,
-                      department: selCase.department,
+                      description: (selCase as any).description,
+                      category: targetDept,
+                      department: targetDept,
                       municipal_corporation: muniCode,
-                      ward: selCase.location
+                      ward: (selCase as any).ward || selCase.location,
+                      priority: (selCase as any).priority || 'Medium'
                     }, employeesList as any);
                     setAiDispatchRec(rec);
                     if (rec.recommendedEmployee) {
-                      setAssignTargetEmp(rec.recommendedEmployee.id || rec.recommendedEmployee.employee_code);
+                      const recId = rec.recommendedEmployee.employee_code || rec.recommendedEmployee.id;
+                      const matchedEmp = employeesList.find(e => e.id === recId || e.employee_code === recId || (e as any).id === recId);
+                      if (matchedEmp) setAssignTargetEmp(matchedEmp.id);
+                      else if (recId) setAssignTargetEmp(recId);
                     }
                   }
                 }}

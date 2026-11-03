@@ -1,0 +1,348 @@
+[
+  {
+    "route": "/",
+    "page_name": "landing_page",
+    "viewport": "desktop",
+    "resolution": "1440x900",
+    "status_code": 200,
+    "load_time_ms": 5175,
+    "console_errors": [],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\landing_page_desktop.png"
+  },
+  {
+    "route": "/",
+    "page_name": "landing_page",
+    "viewport": "laptop",
+    "resolution": "1366x768",
+    "status_code": 200,
+    "load_time_ms": 947,
+    "console_errors": [],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\landing_page_laptop.png"
+  },
+  {
+    "route": "/",
+    "page_name": "landing_page",
+    "viewport": "tablet",
+    "resolution": "768x1024",
+    "status_code": 200,
+    "load_time_ms": 1005,
+    "console_errors": [],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\landing_page_tablet.png"
+  },
+  {
+    "route": "/",
+    "page_name": "landing_page",
+    "viewport": "mobile",
+    "resolution": "390x844",
+    "status_code": 200,
+    "load_time_ms": 865,
+    "console_errors": [],
+    "failed_requests": [],
+    "horizontal_overflow": true,
+    "screenshot": "audit_reports\\screenshots\\landing_page_mobile.png"
+  },
+  {
+    "route": "/login",
+    "page_name": "citizen_login",
+    "viewport": "desktop",
+    "resolution": "1440x900",
+    "status_code": 200,
+    "load_time_ms": 2447,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\citizen_login_desktop.png"
+  },
+  {
+    "route": "/login",
+    "page_name": "citizen_login",
+    "viewport": "laptop",
+    "resolution": "1366x768",
+    "status_code": 200,
+    "load_time_ms": 3155,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\citizen_login_laptop.png"
+  },
+  {
+    "route": "/login",
+    "page_name": "citizen_login",
+    "viewport": "tablet",
+    "resolution": "768x1024",
+    "status_code": 200,
+    "load_time_ms": 2613,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\citizen_login_tablet.png"
+  },
+  {
+    "route": "/login",
+    "page_name": "citizen_login",
+    "viewport": "mobile",
+    "resolution": "390x844",
+    "status_code": 200,
+    "load_time_ms": 2752,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": true,
+    "screenshot": "audit_reports\\screenshots\\citizen_login_mobile.png"
+  },
+  {
+    "route": "/department-login",
+    "page_name": "department_login",
+    "viewport": "desktop",
+    "resolution": "1440x900",
+    "status_code": 200,
+    "load_time_ms": 20609,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\department_login_desktop.png"
+  },
+  {
+    "route": "/department-login",
+    "page_name": "department_login",
+    "viewport": "laptop",
+    "resolution": "1366x768",
+    "status_code": 200,
+    "load_time_ms": 1251,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\department_login_laptop.png"
+  },
+  {
+    "route": "/department-login",
+    "page_name": "department_login",
+    "viewport": "tablet",
+    "resolution": "768x1024",
+    "status_code": 200,
+    "load_time_ms": 1188,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\department_login_tablet.png"
+  },
+  {
+    "route": "/department-login",
+    "page_name": "department_login",
+    "viewport": "mobile",
+    "resolution": "390x844",
+    "status_code": 200,
+    "load_time_ms": 1289,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": true,
+    "screenshot": "audit_reports\\screenshots\\department_login_mobile.png"
+  },
+  {
+    "route": "/department",
+    "page_name": "department_command_center",
+    "viewport": "desktop",
+    "resolution": "1440x900",
+    "status_code": 200,
+    "load_time_ms": 4885,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\department_command_center_desktop.png"
+  },
+  {
+    "route": "/department",
+    "page_name": "department_command_center",
+    "viewport": "laptop",
+    "resolution": "1366x768",
+    "status_code": 200,
+    "load_time_ms": 4533,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [
+      "GET https://ntkxitfmdjdjjinxxmmp.supabase.co/rest/v1/complaints?select=*&order=created_at.desc&limit=100: net::ERR_CONNECTION_RESET"
+    ],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\department_command_center_laptop.png"
+  },
+  {
+    "route": "/department",
+    "page_name": "department_command_center",
+    "viewport": "tablet",
+    "resolution": "768x1024",
+    "status_code": 200,
+    "load_time_ms": 4111,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\department_command_center_tablet.png"
+  },
+  {
+    "route": "/department",
+    "page_name": "department_command_center",
+    "viewport": "mobile",
+    "resolution": "390x844",
+    "status_code": 200,
+    "load_time_ms": 4053,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\department_command_center_mobile.png"
+  },
+  {
+    "route": "/employee",
+    "page_name": "employee_workspace",
+    "viewport": "desktop",
+    "resolution": "1440x900",
+    "status_code": 200,
+    "load_time_ms": 2859,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\employee_workspace_desktop.png"
+  },
+  {
+    "route": "/employee",
+    "page_name": "employee_workspace",
+    "viewport": "laptop",
+    "resolution": "1366x768",
+    "status_code": 200,
+    "load_time_ms": 2608,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\employee_workspace_laptop.png"
+  },
+  {
+    "route": "/employee",
+    "page_name": "employee_workspace",
+    "viewport": "tablet",
+    "resolution": "768x1024",
+    "status_code": 200,
+    "load_time_ms": 2631,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\employee_workspace_tablet.png"
+  },
+  {
+    "route": "/employee",
+    "page_name": "employee_workspace",
+    "viewport": "mobile",
+    "resolution": "390x844",
+    "status_code": 200,
+    "load_time_ms": 2813,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()",
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": true,
+    "screenshot": "audit_reports\\screenshots\\employee_workspace_mobile.png"
+  },
+  {
+    "route": "/profile",
+    "page_name": "citizen_profile",
+    "viewport": "desktop",
+    "resolution": "1440x900",
+    "status_code": 200,
+    "load_time_ms": 2587,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\citizen_profile_desktop.png"
+  },
+  {
+    "route": "/profile",
+    "page_name": "citizen_profile",
+    "viewport": "laptop",
+    "resolution": "1366x768",
+    "status_code": 200,
+    "load_time_ms": 2610,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\citizen_profile_laptop.png"
+  },
+  {
+    "route": "/profile",
+    "page_name": "citizen_profile",
+    "viewport": "tablet",
+    "resolution": "768x1024",
+    "status_code": 200,
+    "load_time_ms": 2768,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": false,
+    "screenshot": "audit_reports\\screenshots\\citizen_profile_tablet.png"
+  },
+  {
+    "route": "/profile",
+    "page_name": "citizen_profile",
+    "viewport": "mobile",
+    "resolution": "390x844",
+    "status_code": 200,
+    "load_time_ms": 2547,
+    "console_errors": [
+      "Failed to load resource: the server responded with a status of 404 ()"
+    ],
+    "failed_requests": [],
+    "horizontal_overflow": true,
+    "screenshot": "audit_reports\\screenshots\\citizen_profile_mobile.png"
+  }
+]

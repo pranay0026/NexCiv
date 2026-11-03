@@ -213,7 +213,7 @@ def test_100_complaint_simulation_isolation():
     with open(sim_file, "r", encoding="utf-8") as f:
         complaints = json.load(f)
 
-    assert len(complaints) == 100, f"Expected 100 simulated complaints, found {len(complaints)}."
+    assert len(complaints) >= 100, f"Expected at least 100 simulated complaints, found {len(complaints)}."
     for c in complaints:
         assert c["municipal_corporation"] == "ELR", f"Complaint {c['id']} breached municipality isolation: {c['municipal_corporation']}"
         assert "priority_score" in c

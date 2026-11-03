@@ -2024,10 +2024,13 @@ export const api = {
   },
 
   async recommendDispatch(complaint: any): Promise<any> {
+    const candidate_employees = complaint.candidate_employees;
+    const cleanComplaint = { ...complaint };
+    delete cleanComplaint.candidate_employees;
     const res = await fetch(`${API_URL}/api/ai/recommend-dispatch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ complaint })
+      body: JSON.stringify({ complaint: cleanComplaint, candidate_employees })
     });
     if (!res.ok) {
       throw new Error(`Dispatch recommendation failed: ${res.statusText}`);

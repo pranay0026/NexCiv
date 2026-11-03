@@ -123,6 +123,16 @@ def get_employee(
 
     raise HTTPException(status_code=404, detail=f"Employee {id_or_code} not found")
 
+
+def find_employee_record(id_or_code: str) -> Optional[Dict[str, Any]]:
+    """Helper to find an employee dictionary by ID or code across all municipal registries."""
+    if not id_or_code:
+        return None
+    for emp in _MEMORY_EMPLOYEES:
+        if emp.get("id") == id_or_code or emp.get("employee_code") == id_or_code:
+            return emp
+    return None
+
 @router.post("", response_model=EmployeeResponse)
 def create_employee(
     payload: EmployeeCreate,

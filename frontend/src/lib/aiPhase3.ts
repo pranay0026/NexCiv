@@ -37,7 +37,7 @@ const CADRE_SPECS: Record<string, { equipment: string[]; crewSize: number; slaHo
     equipment: ['Hydraulic Aerial Sky-Lift Truck', 'Lineman 11kV Safety Kit & Insulation Gloves', 'Digital Insulation Megger Tester', 'LED Luminaire Replacement Rig'],
     crewSize: 2,
     slaHours: 12,
-    defaultRole: 'Municipal Electrician & Streetlight In-charge'
+    defaultRole: 'Assistant Engineer (Electrical & Grid Safety)'
   },
   road: {
     equipment: ['Bitumen Patching Truck (Hot/Cold Mix)', 'Plate Compactor Vibratory Roller', 'Heavy-Duty Asphalt Road Cutter', 'Polymer Cold Mix Asphalt Bags'],
@@ -61,35 +61,41 @@ const CADRE_SPECS: Record<string, { equipment: string[]; crewSize: number; slaHo
     equipment: ['Hydraulic Refuse Compactor Dumper Truck', 'ULV Thermal Fogging Machine', 'Bio-Medical Waste Segregation Placer', 'Disinfectant Spray Cannon'],
     crewSize: 4,
     slaHours: 24,
-    defaultRole: 'Sanitary Inspector / Municipal Health Officer'
+    defaultRole: 'Chief Sanitary Inspector (CMOH Cadre)'
   }
 };
 
 export function normalizeDeptKey(rawDept?: string, fullText?: string): string {
-  const text = `${rawDept || ''} ${fullText || ''}`.toLowerCase();
+  const content = (fullText || '').toLowerCase();
+  const raw = (rawDept || '').toLowerCase();
 
-  // 1. Street lights / Electrical (Telugu & English)
-  if (/(స్ట్రీట్ లైట్|వీధి దీపం|దీపం|విద్యుత్|స్తంభం|లైట్|చీకటి|కరెంట్|వైర్|ట్రాన్స్‌ఫార్మర్|street light|streetlight|light|elect|pole|wire|lamp|transformer|spark)/i.test(text)) {
+  // 1. Street lights / Electrical (Telugu & English priority on content)
+  if (/(స్ట్రీట్ లైట్|స్ట్రీట్‌లైట్|వీధి దీపాలు|వీధి దీపం|దీపాలు|దీపం|విద్యుత్|స్తంభం|లైట్లు|లైట్|చీకటి|కరెంట్|వైర్|వైర్లు|ట్రాన్స్‌ఫార్మర్|పనిచేయడం లేదు|వెలుగుట లేదు|street light|streetlight|street lights|light|lights|elect|pole|wire|lamp|transformer|spark|darkness|blackout)/i.test(content) ||
+      /(స్ట్రీట్ లైట్|స్ట్రీట్‌లైట్|వీధి దీపాలు|దీపాలు|విద్యుత్|స్తంభం|లైట్లు|లైట్|కరెంట్|street light|streetlight|street lights|light|elect|pole)/i.test(raw)) {
     return 'street_lights';
   }
   // 2. Water supply (Telugu & English)
-  if (/(నీళ్లు|నీరు|తాగునీరు|పైపు|కుళాయి|లీకేజీ|బోరు|water|drinking|potable|pipe|leak|valve|tap|bore)/i.test(text)) {
+  if (/(నీళ్లు|నీరు|నీటి|తాగునీరు|మంచినీరు|పైప్‌లైన్|పైపు|కుళాయి|బోరు|మోటారు|water|drinking|potable|pipe|leak|pipeline|valve|tap|bore)/i.test(content) ||
+      /(నీళ్లు|నీరు|water|drinking|potable|pipe|leak)/i.test(raw)) {
     return 'water_supply';
   }
   // 3. Drainage (Telugu & English)
-  if (/(డ్రైనేజీ|కాలువ|మురుగు|మ్యాన్‌హోల్|వరద|నీరు నిలిచింది|కంపు|drain|drainage|sewer|sewage|manhole|waterlog|gutter|desilting)/i.test(text)) {
+  if (/(డ్రైనేజీ|డ్రైనేజి|మురుగు|మురుగునీరు|కాలువ|మ్యాన్‌హోల్|పొంగిపొర్లు|మురుగు కాలువ|సెప్టిక్|గట్టర్|drain|drainage|sewer|sewage|manhole|waterlog|gutter|desilting)/i.test(content) ||
+      /(డ్రైనేజీ|drain|drainage|sewer|sewage|manhole)/i.test(raw)) {
     return 'drainage';
   }
   // 4. Roads (Telugu & English)
-  if (/(రోడ్డు|గుంత|రహదారి|డివైడర్|తారు|road|pothole|asphalt|crater|pavement|curb|divider|bitumen)/i.test(text)) {
+  if (/(రోడ్డు|రోడ్|గుంత|గుంతలు|రహదారి|ఫుట్‌పాత్|తారు రోడ్డు|డివైడర్|స్పీడ్ బ్రేకర్|road|roads|pothole|potholes|asphalt|crater|pavement|curb|divider|bitumen)/i.test(content) ||
+      /(రోడ్డు|road|pothole|asphalt)/i.test(raw)) {
     return 'road';
   }
   // 5. Sanitation / Others (Telugu & English)
-  if (/(చెత్త|కుప్ప|దుర్గంధం|వ్యర్థాలు|garbage|waste|trash|sanitat|clean|fogging|mosquito|bleaching)/i.test(text)) {
+  if (/(చెత్త|వ్యర్థాలు|దుర్గంధం|స్వచ్ఛ|చెత్తకుండీ|చచ్చిన జంతువు|పారిశుధ్యం|కంపు|డస్ట్‌బిన్|garbage|waste|trash|sanitat|clean|fogging|mosquito|bleaching)/i.test(content) ||
+      /(చెత్త|garbage|waste|trash|sanitat)/i.test(raw)) {
     return 'others';
   }
 
-  const clean = (rawDept || '').toLowerCase().replace(/[\s_\-]+/g, '');
+  const clean = raw.replace(/[\s_\-]+/g, '');
   if (clean.includes('light') || clean.includes('elect')) return 'street_lights';
   if (clean.includes('water')) return 'water_supply';
   if (clean.includes('drain') || clean.includes('sewer')) return 'drainage';
@@ -117,14 +123,15 @@ export function recommendSmartDispatch(
 
   // Filter department officers with strict cadre matching (no cross-department leakage!)
   const deptOfficers = availableEmployees.filter(e => {
-    const dKey = normalizeDeptKey(e.department);
+    const rawDept = (e as any).department_raw || e.department;
+    const dKey = normalizeDeptKey(rawDept);
     return dKey === targetDept;
   });
 
   // If no officers exist strictly in this department, find within municipality with similar skills
   const candidates = deptOfficers.length > 0 ? deptOfficers : availableEmployees.filter(e => {
     const s = ((e as any).skills || '').toLowerCase();
-    const d = (e.department || '').toLowerCase();
+    const d = ((e as any).department_raw || e.department || '').toLowerCase();
     return s.includes(targetDept) || d.includes(targetDept);
   });
 
@@ -178,7 +185,7 @@ export function recommendSmartDispatch(
 
   const officerCode = bestCandidate.employee_code || bestCandidate.id || `${corpCode}-EMP-101`;
   const officerName = bestCandidate.name || 'Municipal Officer';
-  const officerDesig = bestCandidate.designation || bestCandidate.role || spec.defaultRole;
+  const officerDesig = bestCandidate.designation || bestCandidate.role || spec.defaultRole || 'Municipal Cadre Officer';
   const pendingCount = (bestCandidate as any).pending ?? (bestCandidate as any).pending_count ?? 1;
   const ratingScore = (bestCandidate as any).rating || 4.8;
 

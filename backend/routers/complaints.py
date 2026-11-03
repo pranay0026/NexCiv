@@ -731,6 +731,7 @@ def create_complaint(
                 "category": category,
                 "department": department,
                 "department_code": department_code,
+                "municipal_corporation": corp,
                 "priority": priority,
                 "priority_score": priority_score,
                 "confidence": confidence,
@@ -758,7 +759,9 @@ def create_complaint(
 
             res = supabase.table("complaints").insert(modern_payload).execute()
             if res.data and len(res.data) > 0:
-                final_complaint = {**complaint_dict, **res.data[0]}
+                final_complaint = {**complaint_dict, **{k: v for k, v in res.data[0].items() if v is not None}}
+                if not final_complaint.get("municipal_corporation"):
+                    final_complaint["municipal_corporation"] = corp
         except Exception as e:
             # Resilient fallback if remote Supabase schema has master_complaint_id as UUID type
             if "22P02" in str(e) and modern_payload.get("master_complaint_id"):
@@ -790,9 +793,19 @@ def create_complaint(
         comments=f"Governing source: {legal_source}. Expected resolution: {deadline_formatted}."
     )
 
-    # 7. Automated Citizen Notification Receipt
+    # 7. Automated Citizen Notification Receipt & Employee Work Order Dispatch
     try:
+        from notifications import send_complaint_acknowledgment, send_employee_assignment_notification
         send_complaint_acknowledgment(final_complaint)
+        if final_complaint.get("assigned_employee_id"):
+            from routers.employees import find_employee_record
+            emp_rec = find_employee_record(final_complaint["assigned_employee_id"]) or {
+                "id": final_complaint["assigned_employee_id"],
+                "name": final_complaint.get("assigned_team") or "Municipal Cadre Officer",
+                "department": final_complaint.get("department") or final_complaint.get("category"),
+                "municipality_code": final_complaint.get("municipal_corporation", "ELR")
+            }
+            send_employee_assignment_notification(final_complaint, emp_rec)
     except Exception as notif_err:
         print(f"Notification dispatch note: {notif_err}")
 
@@ -1438,6 +1451,21 @@ def assign_complaint(
             print(f"Supabase complaint assignment note: {e}")
 
     if updated_record:
+        # Dispatch Real-Time Work Order Email to Employee & Progress Notice to Citizen
+        try:
+            from notifications import send_employee_assignment_notification, send_citizen_assignment_update
+            from routers.employees import find_employee_record
+            emp_rec = find_employee_record(payload.employee_id) or {
+                "id": payload.employee_id,
+                "name": payload.assigned_team or "Municipal Field Engineer",
+                "department": updated_record.get("department") or updated_record.get("category"),
+                "municipality_code": updated_record.get("municipal_corporation", "ELR")
+            }
+            send_employee_assignment_notification(updated_record, emp_rec)
+            send_citizen_assignment_update(updated_record, emp_rec)
+        except Exception as notif_assign_err:
+            print(f"Assignment notification note: {notif_assign_err}")
+
         enriched = _enrich_complaint_sla(updated_record)
         return _apply_privacy_mask(enriched, current_user)
 

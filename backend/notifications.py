@@ -425,3 +425,204 @@ def _send_raw_sms(clean_phone_india: str, sms_body: str, results: Dict[str, Any]
             results["details"].append(f"Twilio error: {e}")
     else:
         results["details"].append(f"SMS notification ready for +91{clean_phone_india}.")
+
+
+def send_employee_assignment_notification(complaint: Dict[str, Any], employee: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sends official Municipal Work Order assignment email to the assigned field engineer / officer.
+    Informs officer of statutory SLA deadline, location, defect nature, and required cadre equipment.
+    """
+    results = {"email_sent": False, "details": []}
+
+    complaint_id = str(complaint.get("id", "NXC-PENDING"))
+    short_id = complaint.get("grievance_ref_number") or (f"NXC-{complaint_id[:6].upper()}" if len(complaint_id) > 6 else complaint_id)
+    emp_name = employee.get("name") or "Municipal Field Engineer"
+    emp_code = employee.get("employee_code") or employee.get("id") or "CADRE-OFFICER"
+    emp_email = employee.get("email") or f"{emp_code.lower()}@nexciv.gov.in"
+    emp_desig = employee.get("designation") or employee.get("role") or "Cadre Officer"
+
+    title = complaint.get("title", "Civic Work Order")
+    description = complaint.get("description", "Field remediation required as per complaint report.")
+    category = (complaint.get("category") or complaint.get("department") or "general").replace("_", " ").title()
+    priority = complaint.get("priority", "Medium")
+    priority_score = float(complaint.get("priority_score", 65.0))
+    sla = complaint.get("municipal_sla") or complaint.get("deadline_formatted") or "Within Statutory Timeline"
+    location = complaint.get("location_address") or complaint.get("landmark") or "Municipal Jurisdiction"
+    ward = complaint.get("ward") or "Ward Office"
+    corp = (complaint.get("municipal_corporation") or employee.get("municipality_code") or "ELR").upper()
+    equipment = complaint.get("required_equipment") or ["Standard Cadre Field Kit", "Safety Harness"]
+    crew_size = complaint.get("required_crew_size") or 2
+    assigned_team = complaint.get("assigned_team") or f"{corp} Rapid Response Unit"
+
+    prio_color = "#dc2626" if priority == "Critical" else "#ea580c" if priority == "High" else "#0d9488"
+    prio_bg = "#fee2e2" if priority == "Critical" else "#ffedd5" if priority == "High" else "#ccfbf1"
+
+    subject = f"[NEXCIV WORK ORDER] [{priority.upper()}] Case {short_id} Assigned to {emp_name} ({corp})"
+
+    equipment_items_html = "".join([f"<li style='margin-bottom: 4px;'>{eq}</li>" for eq in equipment])
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #1e293b; margin: 0; padding: 24px; }}
+        .card {{ max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 18px; border: 1px solid #cbd5e1; overflow: hidden; box-shadow: 0 12px 30px rgba(0,0,0,0.15); }}
+        .header {{ background: #0f172a; color: #ffffff; padding: 26px 24px; text-align: left; border-bottom: 4px solid {prio_color}; }}
+        .badge-wo {{ display: inline-block; background: rgba(255,255,255,0.15); color: #f8fafc; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 6px; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; }}
+        .brand {{ font-size: 21px; font-weight: 900; letter-spacing: 0.5px; color: #ffffff; }}
+        .tagline {{ font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-top: 4px; letter-spacing: 1px; }}
+        .body {{ padding: 26px 24px; }}
+        .greeting {{ font-size: 16px; font-weight: 800; color: #0f172a; margin-bottom: 12px; }}
+        .lead-text {{ font-size: 13.5px; line-height: 1.6; color: #334155; margin-bottom: 18px; }}
+        .details-box {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; margin: 18px 0; }}
+        .row {{ display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #e2e8f0; font-size: 13px; }}
+        .row:last-child {{ border-bottom: none; }}
+        .label {{ color: #64748b; font-weight: 600; }}
+        .val {{ color: #0f172a; font-weight: 700; text-align: right; max-width: 65%; }}
+        .badge-prio {{ color: {prio_color}; font-weight: 900; background: {prio_bg}; padding: 3px 10px; border-radius: 6px; font-size: 12px; }}
+        .equipment-box {{ background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 14px 18px; margin: 16px 0; font-size: 12.5px; color: #166534; }}
+        .footer {{ background: #f8fafc; padding: 18px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; line-height: 1.6; }}
+        .cta-btn {{ display: inline-block; background: #0d9488; color: #ffffff !important; padding: 12px 28px; border-radius: 10px; font-weight: 800; font-size: 13px; text-decoration: none; margin: 16px 0; box-shadow: 0 4px 10px rgba(13,148,136,0.3); }}
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <div class="badge-wo">OFFICIAL WORK ORDER DISPATCH &bull; {corp}</div>
+          <div class="brand">ANDHRA PRADESH URBAN LOCAL BODIES</div>
+          <div class="tagline">NEXCIV Municipal Engineering &amp; Operations Wing</div>
+        </div>
+        <div class="body">
+          <div class="greeting">Officer: {emp_name} ({emp_desig})</div>
+          <p class="lead-text">
+            A civic grievance in your operational sector has been officially assigned to you for inspection and rectification under the Andhra Pradesh Public Services Guarantee framework.
+          </p>
+
+          <div class="details-box">
+            <div class="row"><span class="label">Work Order / Case ID:</span><span class="val" style="color: #0d9488; font-size: 14px;">{short_id}</span></div>
+            <div class="row"><span class="label">Incident Title:</span><span class="val">{title}</span></div>
+            <div class="row"><span class="label">Department Cadre:</span><span class="val">{category} ({assigned_team})</span></div>
+            <div class="row"><span class="label">AI Priority Level:</span><span class="val"><span class="badge-prio">{priority} ({priority_score:.1f}/100)</span></span></div>
+            <div class="row"><span class="label">Statutory SLA Deadline:</span><span class="val" style="color: #d97706; font-weight: 800;">{sla}</span></div>
+            <div class="row"><span class="label">Incident Location:</span><span class="val">{location} &middot; {ward}</span></div>
+            <div class="row"><span class="label">Citizen Report:</span><span class="val" style="font-weight: 500; color: #475569;">{description}</span></div>
+          </div>
+
+          <div class="equipment-box">
+            <strong>Mandatory Cadre Equipment &amp; Crew Assigned:</strong>
+            <ul style="margin: 6px 0 0 16px; padding: 0;">
+              {equipment_items_html}
+            </ul>
+            <div style="margin-top: 6px; font-weight: 700;">Required Crew Deployment: {crew_size} personnel</div>
+          </div>
+
+          <div style="text-align: center;">
+            <a href="{PORTAL_URL}/employee" class="cta-btn">Open Employee Workspace &amp; Begin Action &rarr;</a>
+          </div>
+        </div>
+        <div class="footer">
+          NEXCIV Municipal Cadre Dispatch System &bull; AP Municipalities Act, 1965 &amp; Municipal Corporations Act, 1994 &bull; Grievance Helpline: 1904
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    plain_text = f"""
+NEXCIV OFFICIAL WORK ORDER DISPATCH
+-----------------------------------
+Work Order ID: {short_id}
+Assigned Officer: {emp_name} ({emp_code})
+Designation: {emp_desig}
+Corporation: {corp}
+Category: {category}
+Priority: {priority} ({priority_score:.1f}/100)
+Statutory SLA: {sla}
+Location: {location} ({ward})
+Citizen Description: {description}
+
+Recommended Equipment: {', '.join(equipment)}
+Crew Size: {crew_size} persons
+
+Access your assigned case in the Employee Workspace at:
+{PORTAL_URL}/employee
+    """
+
+    sent = _send_resend_email(emp_email, subject, html_content, plain_text)
+    if not sent:
+        sent = _send_smtp_email(emp_email, subject, html_content, plain_text)
+
+    results["email_sent"] = sent
+    results["details"].append(f"Work order email to {emp_email}: {'Delivered' if sent else 'Fallback / Queued'}")
+    return results
+
+
+def send_citizen_assignment_update(complaint: Dict[str, Any], employee: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Informs citizen when their registered complaint is assigned to an officer or crew.
+    """
+    results = {"email_sent": False, "details": []}
+
+    complaint_id = str(complaint.get("id", "NXC-PENDING"))
+    short_id = complaint.get("grievance_ref_number") or (f"NXC-{complaint_id[:6].upper()}" if len(complaint_id) > 6 else complaint_id)
+    citizen_name = complaint.get("citizen_name") or "Citizen"
+    citizen_email = complaint.get("citizen_email") or ADMIN_FALLBACK_EMAIL
+    emp_name = employee.get("name") or "Municipal Engineering Squad"
+    emp_desig = employee.get("designation") or employee.get("role") or "Field Engineer"
+    title = complaint.get("title", "Civic Grievance")
+    corp = complaint.get("municipal_corporation", "GVMC")
+    sla = complaint.get("municipal_sla") or complaint.get("deadline_formatted") or "Within Target Window"
+
+    subject = f"[NEXCIV] Officer Dispatched: {short_id} - {title} ({corp})"
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }}
+        .card {{ max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 18px; border: 1px solid #e2e8f0; overflow: hidden; }}
+        .header {{ background: #0e2238; color: #ffffff; padding: 24px; text-align: left; border-bottom: 4px solid #0d9488; }}
+        .body {{ padding: 24px; }}
+        .details-box {{ background: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 12px; padding: 16px; margin: 18px 0; font-size: 13px; }}
+        .row {{ display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #ccfbf1; }}
+        .row:last-child {{ border-bottom: none; }}
+        .cta-btn {{ display: inline-block; background: #0d9488; color: #ffffff !important; padding: 10px 24px; border-radius: 8px; font-weight: 700; font-size: 13px; text-decoration: none; }}
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <div style="font-size: 11px; color: #2dd4bf; text-transform: uppercase; font-weight: 800;">Grievance Status Update</div>
+          <div style="font-size: 20px; font-weight: 900; color: #ffffff;">Field Team Dispatched</div>
+        </div>
+        <div class="body">
+          <p>Dear {citizen_name},</p>
+          <p>Your grievance <strong>[{short_id}]</strong> has been dispatched for field inspection and engineering action.</p>
+          <div class="details-box">
+            <div class="row"><span>Assigned Officer:</span><strong>{emp_name}</strong></div>
+            <div class="row"><span>Designation:</span><strong>{emp_desig}</strong></div>
+            <div class="row"><span>Target SLA:</span><strong style="color: #0d9488;">{sla}</strong></div>
+            <div class="row"><span>Status:</span><strong style="color: #2563eb;">In Progress</strong></div>
+          </div>
+          <div style="text-align: center; margin-top: 20px;">
+            <a href="{PORTAL_URL}" class="cta-btn">Track Live Status &rarr;</a>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    plain_text = f"NEXCIV: Your grievance {short_id} has been dispatched to {emp_name} ({emp_desig}). Target SLA: {sla}. Track at {PORTAL_URL}"
+
+    sent = _send_resend_email(citizen_email, subject, html_content, plain_text)
+    if not sent:
+        sent = _send_smtp_email(citizen_email, subject, html_content, plain_text)
+
+    results["email_sent"] = sent
+    results["details"].append(f"Assignment update to {citizen_email}: {'Delivered' if sent else 'Fallback / Queued'}")
+    return results
