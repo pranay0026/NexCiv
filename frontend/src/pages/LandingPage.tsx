@@ -2023,6 +2023,26 @@ export default function LandingPage() {
                     </div>
                   </div>
 
+                  {/* Master Incident Consolidation Indicator */}
+                  {trackedComplaint.master_complaint_id && (
+                    <div className="p-2.5 rounded-xl bg-teal-50 border border-teal-200 text-xs text-teal-950 flex items-center justify-between shadow-2xs">
+                      <div className="flex items-center gap-2">
+                        <Sparkles size={14} className="text-teal-600 shrink-0" />
+                        <div>
+                          <span className="block text-[10px] text-teal-700 font-bold uppercase tracking-wider">
+                            Consolidated Master Incident
+                          </span>
+                          <span className="font-mono font-bold text-slate-800">
+                            {trackedComplaint.master_complaint_id}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-200 text-teal-800">
+                        {trackedComplaint.is_duplicate ? 'Prioritized with Community' : 'Active Master Incident'}
+                      </span>
+                    </div>
+                  )}
+
                   {/* 4-Stage Visual Stepper */}
                   <div className="pt-2">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">

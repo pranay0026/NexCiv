@@ -57,6 +57,7 @@ interface ComplaintItem {
   confidence?: number;
   upvotes?: number;
   isDuplicate?: boolean;
+  masterComplaintId?: string;
   defectType?: string;
   visualScore?: number;
   sla?: string;
@@ -241,6 +242,7 @@ export default function EmployeeWorkspace() {
             confidence: item.confidence,
             upvotes: item.upvote_count || 1,
             isDuplicate: item.is_duplicate,
+            masterComplaintId: item.master_complaint_id,
             defectType: item.defect_type,
             visualScore: item.visual_score,
             sla: item.municipal_sla,
@@ -1106,8 +1108,16 @@ export default function EmployeeWorkspace() {
 
                           {/* Card Footer Actions */}
                           <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2 flex-wrap">
-                            <div className="text-[11px] font-bold text-slate-500">
-                              Priority: <span className="text-rose-600">{item.priority || 'Medium'}</span> {item.priorityScore ? `(${Math.round(item.priorityScore)}/100)` : ''}
+                            <div className="text-[11px] font-bold text-slate-500 flex items-center gap-2 flex-wrap">
+                              <span>Priority: <span className="text-rose-600">{item.priority || 'Medium'}</span> {item.priorityScore ? `(${Math.round(item.priorityScore)}/100)` : ''}</span>
+                              {item.masterComplaintId && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 px-2 py-0.5 rounded-md">
+                                  <span>Incident: {item.masterComplaintId}</span>
+                                  {item.isDuplicate && (
+                                    <span className="bg-amber-100 text-amber-800 text-[9px] px-1 rounded font-sans">Duplicate Linked</span>
+                                  )}
+                                </span>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-1.5 ml-auto">

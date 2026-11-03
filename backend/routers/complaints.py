@@ -23,6 +23,17 @@ from schemas import (
 )
 from routers.employees import increment_employee_workload, record_employee_resolution
 
+# NEX-CIV Duplicate Detection & Master Incident Integration
+try:
+    from duplicate_detection.retrieval.vector_store import get_vector_store
+    from duplicate_detection.decision_engine.hybrid_engine import get_decision_engine
+    from duplicate_detection.embeddings.embedder import get_embedder
+    from duplicate_detection.cross_encoder.reranker import get_cross_encoder
+    _HAS_HYBRID_DUPLICATE_ENGINE = True
+except Exception as e:
+    print(f"Notice: Duplicate detection hybrid engine import: {e}")
+    _HAS_HYBRID_DUPLICATE_ENGINE = False
+
 router = APIRouter(prefix="/api/complaints", tags=["complaints"])
 
 # Persistent local disk storage for complaints (resilient fallback against cloud network/RLS issues)
@@ -437,45 +448,109 @@ def create_complaint(
             defect_type = cv_res.get('defect_type')
             visual_score = cv_res.get('visual_severity_score')
 
-    # 4. Duplicate Detection
-    clustering_engine = get_clustering_engine()
-    active_candidates = []
-    if supabase is not None:
-        try:
-            sup_res = supabase.table("complaints").select("*").neq("status", "resolved").limit(150).execute()
-            if sup_res.data:
-                active_candidates = sup_res.data
-        except Exception:
-            pass
-    if not active_candidates:
-        active_candidates = [c for c in _MEMORY_COMPLAINTS if c.get("status") != "resolved"]
-
-    candidate_obj = {
-        'title': complaint.title,
-        'description': complaint.description,
-        'category': category,
-        'department_code': department_code,
-        'location_lat': complaint.location_lat,
-        'location_lng': complaint.location_lng,
-        'location_address': complaint.location_address,
-        'image_hash': image_hash,
-        'image_url': image_url
-    }
-
-    duplicate_match = clustering_engine.find_duplicate(candidate_obj, active_candidates)
+    # 4. Intelligent Multilingual & Multimodal Duplicate Detection
     is_duplicate = False
     master_complaint_id = None
     upvote_count = 1
 
-    if duplicate_match:
-        is_duplicate = True
-        master_complaint_id = duplicate_match['master_complaint_id']
-        for m in _MEMORY_COMPLAINTS:
-            if m.get('id') == master_complaint_id:
-                m['upvote_count'] = m.get('upvote_count', 1) + 1
-                m['duplicate_count'] = m.get('duplicate_count', 0) + 1
-                m['priority_score'] = min(100.0, m.get('priority_score', 50.0) + 5.0)
-                break
+    candidate_obj = {
+        'id': item_id,
+        'title': complaint.title,
+        'description': complaint.description,
+        'category': category,
+        'department_code': department_code,
+        'department': department,
+        'complaint_type': classification.get('complaint_type', 'other_civic_issue'),
+        'location_lat': complaint.location_lat,
+        'location_lng': complaint.location_lng,
+        'location_address': complaint.location_address,
+        'ward': complaint.ward,
+        'municipal_corporation': corp,
+        'image_hash': image_hash,
+        'image_url': image_url,
+        'priority': priority,
+        'priority_score': priority_score,
+        'assigned_team': assigned_team,
+        'assigned_employee_id': complaint.assigned_employee_id,
+        'created_at': now_str
+    }
+
+    if _HAS_HYBRID_DUPLICATE_ENGINE:
+        try:
+            vector_store = get_vector_store()
+            hybrid_engine = get_decision_engine()
+            embedder = get_embedder()
+            cross_encoder = get_cross_encoder()
+
+            # Encode and store embedding
+            q_emb = embedder.encode(complaint.description)[0]
+            vector_store.add_complaint_embedding(item_id, q_emb)
+
+            # Retrieve candidate master incidents
+            candidates = vector_store.search_candidates(
+                query_embedding=q_emb,
+                department_code=department_code,
+                municipality=corp,
+                top_k=8
+            )
+
+            matched_inc = None
+            highest_score = 0.0
+
+            for cand in candidates:
+                sem_sim = cand.get('semantic_similarity', 0.5)
+                cand_desc = cand.get('description', '') or cand.get('title', '')
+                ce_score = cross_encoder.predict_pair(complaint.description, cand_desc) if cand_desc else sem_sim
+                eval_res = hybrid_engine.evaluate_pair(candidate_obj, cand, sem_sim, ce_score)
+                if eval_res['composite_score'] > highest_score and eval_res['decision'] == 'duplicate':
+                    highest_score = eval_res['composite_score']
+                    matched_inc = (cand, eval_res)
+
+            if matched_inc:
+                cand, eval_res = matched_inc
+                is_duplicate = True
+                master_complaint_id = cand['incident_id']
+                vector_store.link_complaint(
+                    complaint_id=item_id,
+                    master_incident_id=master_complaint_id,
+                    link_type='ai_auto',
+                    similarity_score=eval_res['composite_score'],
+                    notes=f"Auto-linked duplicate incident: {eval_res['composite_score']:.1%} match"
+                )
+                vector_store.record_prediction({
+                    'new_complaint_id': item_id,
+                    'candidate_incident_id': master_complaint_id,
+                    'composite_duplicate_score': eval_res['composite_score'],
+                    'semantic_similarity': eval_res['semantic_similarity'],
+                    'location_similarity': eval_res['location_similarity'],
+                    'cross_encoder_score': eval_res['cross_encoder_score'],
+                    'temporal_compatibility': eval_res['temporal_compatibility'],
+                    'image_similarity': eval_res['image_similarity'],
+                    'distance_meters': eval_res['distance_meters'],
+                    'decision': eval_res['decision'],
+                    'reasons': eval_res['reasons']
+                })
+            else:
+                # Register as a brand new Master Incident
+                new_inc = vector_store.create_master_incident(candidate_obj)
+                master_complaint_id = new_inc['incident_id']
+                is_duplicate = False
+
+        except Exception as e:
+            print(f"Notice: Hybrid duplicate detection fallback: {e}")
+            clustering_engine = get_clustering_engine()
+            active_candidates = [c for c in _MEMORY_COMPLAINTS if c.get("status") != "resolved"]
+            duplicate_match = clustering_engine.find_duplicate(candidate_obj, active_candidates)
+            if duplicate_match:
+                is_duplicate = True
+                master_complaint_id = duplicate_match['master_complaint_id']
+    else:
+        clustering_engine = get_clustering_engine()
+        active_candidates = [c for c in _MEMORY_COMPLAINTS if c.get("status") != "resolved"]
+        duplicate_match = clustering_engine.find_duplicate(candidate_obj, active_candidates)
+        if duplicate_match:
+            is_duplicate = True
+            master_complaint_id = duplicate_match['master_complaint_id']
 
     images = complaint.images or ([image_url] if image_url else [])
     if not image_url and images and len(images) > 0:
@@ -581,7 +656,17 @@ def create_complaint(
             if res.data and len(res.data) > 0:
                 final_complaint = {**complaint_dict, **res.data[0]}
         except Exception as e:
-            print(f"Supabase insert note: {e}")
+            # Resilient fallback if remote Supabase schema has master_complaint_id as UUID type
+            if "22P02" in str(e) and modern_payload.get("master_complaint_id"):
+                try:
+                    retry_payload = {**modern_payload, "master_complaint_id": None}
+                    res = supabase.table("complaints").insert(retry_payload).execute()
+                    if res.data and len(res.data) > 0:
+                        final_complaint = {**complaint_dict, **res.data[0]}
+                except Exception as e2:
+                    print(f"Supabase retry insert note: {e2}")
+            else:
+                print(f"Supabase insert note: {e}")
 
     # 6. Record Immutable Activity Logs
     record_activity_log(

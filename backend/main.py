@@ -20,6 +20,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers import complaints, classify, employees, auth, ai, compliance, investigations
 from classifier import get_classifier
 
+# Duplicate Detection & Master Incident Engine Integration
+try:
+    from duplicate_detection.api.routes import router as duplicate_router
+except Exception as e:
+    print(f"Notice: Failed to import duplicate detection router: {e}")
+    duplicate_router = None
+
 app = FastAPI(title="NEXCIV API", version="3.1.0")
 
 app.add_middleware(
@@ -37,6 +44,8 @@ app.include_router(auth.router)
 app.include_router(ai.router)
 app.include_router(compliance.router)
 app.include_router(investigations.router)
+if duplicate_router:
+    app.include_router(duplicate_router)
 
 @app.on_event("startup")
 async def startup_event():
