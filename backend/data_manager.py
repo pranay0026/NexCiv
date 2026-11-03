@@ -212,6 +212,15 @@ def init_tables():
                 emp["password_hash"] = hash_password(emp.get("password") or "pass123")
         _write_table("employees", seeds)
 
+    # 4. Legal Service Rules Table (AP Act No. 6 of 2018 & Citizen Charters)
+    rules = _read_table("legal_service_rules")
+    if not rules:
+        try:
+            from legal_rules import BASELINE_LEGAL_RULES
+            _write_table("legal_service_rules", BASELINE_LEGAL_RULES)
+        except Exception as e:
+            print(f"[DATA MANAGER] Error seeding legal service rules: {e}")
+
 init_tables()
 
 # ------------------------------------------------------------------------------
@@ -470,3 +479,246 @@ def get_employees_by_municipality(municipality_code: Optional[str]) -> List[Dict
         if (e.get("municipality_code") or "").upper() == target or target in (e.get("employee_code") or "").upper()
     ]
     return filtered
+
+
+# ------------------------------------------------------------------------------
+# 5. LEGAL RULES, AUDIT TRAIL, INVESTIGATIONS & ESCALATIONS
+# ------------------------------------------------------------------------------
+
+def get_all_legal_rules() -> List[Dict[str, Any]]:
+    rules = _read_table("legal_service_rules")
+    if not rules:
+        try:
+            from legal_rules import BASELINE_LEGAL_RULES
+            _write_table("legal_service_rules", BASELINE_LEGAL_RULES)
+            return BASELINE_LEGAL_RULES
+        except Exception:
+            return []
+    return rules
+
+def get_legal_rule_by_id(rule_id: str) -> Optional[Dict[str, Any]]:
+    rules = get_all_legal_rules()
+    for r in rules:
+        if r.get("id") == rule_id:
+            return r
+    return None
+
+def update_legal_rule(rule_id: str, updates: Dict[str, Any], updated_by: str = "Department Head") -> Dict[str, Any]:
+    rules = get_all_legal_rules()
+    target_rule = None
+    target_idx = -1
+    for idx, r in enumerate(rules):
+        if r.get("id") == rule_id:
+            target_rule = r
+            target_idx = idx
+            break
+
+    if not target_rule:
+        raise ValueError(f"Legal Rule {rule_id} not found")
+
+    old_version = target_rule.get("version", 1)
+    new_version = old_version + 1
+
+    # Record version history
+    versions = _read_table("legal_rule_versions")
+    version_entry = {
+        "id": str(uuid.uuid4()),
+        "rule_id": rule_id,
+        "version": old_version,
+        "changes_summary": updates.get("change_reason", "Administrative modification"),
+        "updated_by": updated_by,
+        "previous_config": dict(target_rule),
+        "new_config": {**target_rule, **updates, "version": new_version},
+        "created_at": datetime.utcnow().isoformat() + "Z"
+    }
+    versions.insert(0, version_entry)
+    _write_table("legal_rule_versions", versions)
+
+    # Update active rule
+    target_rule.update(updates)
+    target_rule["version"] = new_version
+    target_rule["updated_at"] = datetime.utcnow().isoformat() + "Z"
+    rules[target_idx] = target_rule
+    _write_table("legal_service_rules", rules)
+    return target_rule
+
+def get_rule_versions(rule_id: str) -> List[Dict[str, Any]]:
+    versions = _read_table("legal_rule_versions")
+    return [v for v in versions if v.get("rule_id") == rule_id]
+
+def record_activity_log(
+    complaint_id: str,
+    actor_role: str,
+    action: str,
+    actor_id: Optional[str] = None,
+    actor_name: Optional[str] = None,
+    previous_status: Optional[str] = None,
+    new_status: Optional[str] = None,
+    comments: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Appends an immutable entry to the grievance activity log.
+    Audit entries cannot be modified or deleted by normal users.
+    """
+    logs = _read_table("grievance_activity_logs")
+    log_entry = {
+        "id": str(uuid.uuid4()),
+        "complaint_id": complaint_id,
+        "actor_role": actor_role,
+        "actor_id": actor_id or "system",
+        "actor_name": actor_name or "System Dispatcher",
+        "action": action,
+        "previous_status": previous_status,
+        "new_status": new_status,
+        "comments": comments or "",
+        "metadata": metadata or {},
+        "created_at": datetime.utcnow().isoformat() + "Z"
+    }
+    logs.insert(0, log_entry)
+    _write_table("grievance_activity_logs", logs)
+
+    # Sync to Supabase if connected
+    sb = get_supabase()
+    if sb is not None:
+        try:
+            sb.table("grievance_activity_logs").insert(log_entry).execute()
+        except Exception:
+            pass
+
+    return log_entry
+
+def get_complaint_activity_logs(complaint_id: str) -> List[Dict[str, Any]]:
+    logs = _read_table("grievance_activity_logs")
+    matched = [l for l in logs if l.get("complaint_id") == complaint_id]
+    if not matched:
+        # Generate baseline chronological logs if not yet recorded
+        baseline = [
+            {
+                "id": str(uuid.uuid4()),
+                "complaint_id": complaint_id,
+                "actor_role": "citizen",
+                "actor_name": "Citizen",
+                "action": "Grievance Registered",
+                "previous_status": None,
+                "new_status": "pending",
+                "comments": "Complaint submitted through NEX-CIV Citizen Portal.",
+                "created_at": datetime.utcnow().isoformat() + "Z"
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "complaint_id": complaint_id,
+                "actor_role": "system",
+                "actor_name": "AI Triage Engine",
+                "action": "AI Multimodal Classification Completed",
+                "previous_status": "pending",
+                "new_status": "pending",
+                "comments": "Automated department routing & vulnerability multiplier assigned.",
+                "created_at": datetime.utcnow().isoformat() + "Z"
+            }
+        ]
+        return baseline
+    return matched
+
+def save_investigation(investigation: Dict[str, Any]) -> Dict[str, Any]:
+    records = _read_table("grievance_investigations")
+    item_id = investigation.get("id") or str(uuid.uuid4())
+    investigation["id"] = item_id
+    investigation["created_at"] = investigation.get("created_at") or datetime.utcnow().isoformat() + "Z"
+    records.insert(0, investigation)
+    _write_table("grievance_investigations", records)
+
+    # Immutable log
+    record_activity_log(
+        complaint_id=investigation.get("complaint_id", ""),
+        actor_role="employee",
+        actor_id=investigation.get("employee_id"),
+        actor_name=investigation.get("employee_name"),
+        action="Investigation Report Filed",
+        new_status="in_progress" if not investigation.get("is_resolved") else "resolved",
+        comments=f"Findings: {investigation.get('findings', '')[:100]} | Action Taken: {investigation.get('action_taken', '')[:100]}"
+    )
+
+    sb = get_supabase()
+    if sb is not None:
+        try:
+            sb.table("grievance_investigations").insert(investigation).execute()
+        except Exception:
+            pass
+
+    return investigation
+
+def get_investigations_by_complaint(complaint_id: str) -> List[Dict[str, Any]]:
+    records = _read_table("grievance_investigations")
+    return [r for r in records if r.get("complaint_id") == complaint_id]
+
+def save_citizen_feedback(feedback: Dict[str, Any]) -> Dict[str, Any]:
+    feedbacks = _read_table("grievance_feedback")
+    item_id = str(uuid.uuid4())
+    feedback["id"] = item_id
+    feedback["created_at"] = datetime.utcnow().isoformat() + "Z"
+    feedbacks.insert(0, feedback)
+    _write_table("grievance_feedback", feedbacks)
+
+    record_activity_log(
+        complaint_id=feedback.get("complaint_id", ""),
+        actor_role="citizen",
+        actor_name=feedback.get("citizen_name", "Citizen"),
+        action="Citizen Feedback Submitted",
+        comments=f"Rating: {feedback.get('rating', 5)}/5 | Resolved Confirmed: {feedback.get('is_resolved_confirmed', True)}"
+    )
+
+    return feedback
+
+def get_feedback_by_complaint(complaint_id: str) -> Optional[Dict[str, Any]]:
+    feedbacks = _read_table("grievance_feedback")
+    for f in feedbacks:
+        if f.get("complaint_id") == complaint_id:
+            return f
+    return None
+
+def save_escalation(escalation: Dict[str, Any]) -> Dict[str, Any]:
+    escalations = _read_table("grievance_escalations")
+    item_id = str(uuid.uuid4())
+    escalation["id"] = item_id
+    escalation["created_at"] = datetime.utcnow().isoformat() + "Z"
+    escalations.insert(0, escalation)
+    _write_table("grievance_escalations", escalations)
+
+    record_activity_log(
+        complaint_id=escalation.get("complaint_id", ""),
+        actor_role="system",
+        actor_name="Automated Escalation Dispatcher",
+        action=f"Escalation Triggered: Level {escalation.get('escalation_level', 2)}",
+        comments=f"Escalated to: {escalation.get('escalated_to_title', 'Department Head')} | Reason: {escalation.get('reason', '')}"
+    )
+
+    return escalation
+
+def get_escalations_by_complaint(complaint_id: str) -> List[Dict[str, Any]]:
+    escalations = _read_table("grievance_escalations")
+    return [e for e in escalations if e.get("complaint_id") == complaint_id]
+
+def save_appeal(appeal: Dict[str, Any]) -> Dict[str, Any]:
+    appeals = _read_table("grievance_appeals")
+    item_id = str(uuid.uuid4())
+    appeal["id"] = item_id
+    appeal["status"] = "filed"
+    appeal["created_at"] = datetime.utcnow().isoformat() + "Z"
+    appeals.insert(0, appeal)
+    _write_table("grievance_appeals", appeals)
+
+    record_activity_log(
+        complaint_id=appeal.get("complaint_id", ""),
+        actor_role="citizen",
+        actor_name=appeal.get("appellant_name", "Appellant"),
+        action=f"Statutory Appeal Filed (Level {appeal.get('appeal_level', 1)})",
+        comments=f"Ground: {appeal.get('appeal_ground', '')[:100]}"
+    )
+
+    return appeal
+
+def get_appeals_by_complaint(complaint_id: str) -> List[Dict[str, Any]]:
+    appeals = _read_table("grievance_appeals")
+    return [a for a in appeals if a.get("complaint_id") == complaint_id]
+

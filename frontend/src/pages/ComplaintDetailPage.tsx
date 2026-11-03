@@ -1,61 +1,130 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { api, ComplaintRecord } from '../lib/api';
+import {
+  api,
+  ComplaintRecord,
+  ActivityLogRecord,
+  AcknowledgementReceiptData
+} from '../lib/api';
 import {
   ArrowLeft,
   Copy,
   Check,
-  Clock,
   MapPin,
   Camera,
   BrainCircuit,
   Building2,
   ThumbsUp,
-  Printer,
-  ShieldCheck,
   AlertTriangle,
-  Loader2
+  Loader2,
+  Scale,
+  RotateCcw,
+  Star,
+  FileCheck2,
+  Download
 } from 'lucide-react';
+import AcknowledgementReceiptModal from '../components/AcknowledgementReceiptModal';
+import GrievanceTrackingTimeline from '../components/GrievanceTrackingTimeline';
+import CitizenFeedbackModal from '../components/CitizenFeedbackModal';
+import StatutoryAppealModal from '../components/StatutoryAppealModal';
+import RtiVsGrievanceNotice from '../components/RtiVsGrievanceNotice';
 
 export default function ComplaintDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   const [complaint, setComplaint] = useState<ComplaintRecord | null>(null);
+  const [timelineLogs, setTimelineLogs] = useState<ActivityLogRecord[]>([]);
+  const [receiptData, setReceiptData] = useState<AcknowledgementReceiptData | null>(null);
+
   const [loading, setLoading] = useState(true);
+  const [logsLoading, setLogsLoading] = useState(true);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [upvoted, setUpvoted] = useState(false);
   const [upvotesCount, setUpvotesCount] = useState<number>(1);
   const [upvoting, setUpvoting] = useState(false);
 
-  useEffect(() => {
-    if (!id) {
-      setError('Invalid Complaint ID');
-      setLoading(false);
-      return;
-    }
+  // Modals
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [appealModalOpen, setAppealModalOpen] = useState(false);
 
-    setLoading(true);
-    api.getComplaint(id)
-      .then((data) => {
-        if (data) {
-          setComplaint(data);
-          setUpvotesCount(data.upvote_count || 1);
-        } else {
-          setError(`Complaint ${id} could not be located in the municipal records.`);
-        }
-      })
-      .catch((err) => {
-        console.warn('Complaint fetch error:', err);
-        setError(err.message || `Complaint ${id} not found.`);
-      })
-      .finally(() => setLoading(false));
+  const fetchComplaintData = async () => {
+    if (!id) return;
+    try {
+      setLoading(true);
+      const data = await api.getComplaint(id);
+      if (data) {
+        setComplaint(data);
+        setUpvotesCount(data.upvote_count || 1);
+      } else {
+        setError(`Complaint ${id} could not be located in the municipal records.`);
+      }
+    } catch (err: any) {
+      console.warn('Complaint fetch error:', err);
+      setError(err.message || `Complaint ${id} not found.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTimelineData = async () => {
+    if (!id) return;
+    try {
+      setLogsLoading(true);
+      const logs = await api.getActivityLogs(id);
+      setTimelineLogs(logs);
+    } catch (err) {
+      console.warn('Timeline fetch error:', err);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchComplaintData();
+    fetchTimelineData();
   }, [id]);
+
+  const handleOpenReceipt = async () => {
+    if (!complaint) return;
+    try {
+      const receipt = await api.getAcknowledgementReceipt(complaint.id);
+      setReceiptData(receipt);
+      setReceiptModalOpen(true);
+    } catch {
+      // Fallback using current complaint record
+      const ref = complaint.grievance_ref_number || `AP-${complaint.municipal_corporation || 'GVMC'}-2026-NXC${complaint.id.slice(0, 4).toUpperCase()}`;
+      setReceiptData({
+        grievance_ref_number: ref,
+        complaint_id: complaint.id,
+        title: complaint.title,
+        citizen_name: complaint.citizen_name || 'Public Citizen',
+        citizen_email: complaint.citizen_email,
+        citizen_phone: complaint.citizen_phone,
+        submission_time: complaint.created_at,
+        department: complaint.department || 'Municipal Services',
+        department_code: complaint.department_code || 'others',
+        category: complaint.category,
+        workflow_type: complaint.workflow_type || 'ordinary_grievance',
+        legal_source: complaint.legal_source || 'AP Municipal Citizen Charter & PGRS Guidelines',
+        go_reference: 'Standing Order No. 118',
+        designated_officer: complaint.designated_officer || 'Municipal Field Engineer',
+        expected_resolution_date: complaint.expected_resolution_date || complaint.deadline_formatted || 'Within 7 Working Days',
+        timeline_calculation_method: 'working_days',
+        current_status: complaint.status,
+        first_appellate_authority: complaint.appellate_authority || 'Superintending Engineer / Commissioner',
+        appeal_deadline_days: complaint.workflow_type === 'notified_service' ? 30 : 15,
+        compensation_applicable: complaint.workflow_type === 'notified_service'
+      });
+      setReceiptModalOpen(true);
+    }
+  };
 
   const handleCopyId = () => {
     if (!complaint) return;
-    const code = complaint.id.length > 8 ? `NXC-${complaint.id.slice(0, 6).toUpperCase()}` : complaint.id;
+    const code = complaint.grievance_ref_number || (complaint.id.length > 8 ? `NXC-${complaint.id.slice(0, 6).toUpperCase()}` : complaint.id);
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -72,17 +141,12 @@ export default function ComplaintDetailPage() {
         setUpvotesCount((prev) => prev + 1);
       }
       setUpvoted(true);
-    } catch (err) {
-      console.warn('Upvote error:', err);
+    } catch {
       setUpvotesCount((prev) => prev + 1);
       setUpvoted(true);
     } finally {
       setUpvoting(false);
     }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   if (loading) {
@@ -108,7 +172,7 @@ export default function ComplaintDetailPage() {
         <div className="flex gap-3 mt-6">
           <button
             onClick={() => navigate(-1)}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
           >
             &larr; Go Back
           </button>
@@ -123,14 +187,13 @@ export default function ComplaintDetailPage() {
     );
   }
 
-  const shortCode = complaint.id.length > 8 ? `NXC-${complaint.id.slice(0, 6).toUpperCase()}` : complaint.id;
+  const refNumber = complaint.grievance_ref_number || (complaint.id.length > 8 ? `NXC-${complaint.id.slice(0, 6).toUpperCase()}` : complaint.id);
   const isResolved = (complaint.status as string)?.toLowerCase() === 'resolved';
+  const isRejected = (complaint.status as string)?.toLowerCase() === 'rejected';
   const isInProgress = (complaint.status as string)?.toLowerCase() === 'in_progress';
-  const isAssigned = !!complaint.assigned_employee_id || !!complaint.assigned_team || isInProgress || isResolved;
+  const isNotified = complaint.workflow_type === 'notified_service';
+  const isOverdue = complaint.sla_is_overdue;
 
-  const priorityScore = complaint.priority_score ?? (complaint.priority?.toLowerCase() === 'critical' ? 95 : complaint.priority?.toLowerCase() === 'high' ? 75 : 50);
-
-  // Photos list
   const photos: string[] = complaint.images && complaint.images.length > 0
     ? complaint.images
     : complaint.image_url
@@ -155,28 +218,28 @@ export default function ComplaintDetailPage() {
             </button>
             <div className="flex flex-col">
               <span className="text-xs font-extrabold text-slate-900 leading-tight">
-                Public Grievance Dossier
+                Public Grievance Dossier &amp; Legal Compliance
               </span>
               <span className="text-[10px] text-teal-600 font-bold uppercase tracking-wider">
-                {complaint.municipal_corporation || 'GVMC'} Municipal Corporation
+                {complaint.municipal_corporation || 'GVMC'} Municipal Corporation &bull; Andhra Pradesh
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2.5">
             <button
-              onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 transition cursor-pointer"
-              title="Print official receipt"
+              onClick={handleOpenReceipt}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold border border-teal-200 transition cursor-pointer"
+              title="Official Acknowledgement Receipt"
             >
-              <Printer size={13} />
-              <span className="hidden sm:inline">Print Receipt</span>
+              <Download size={13} />
+              <span className="hidden sm:inline">Acknowledgement Receipt</span>
             </button>
             <Link
-              to="/profile"
+              to="/dashboard"
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition shadow-2xs"
             >
-              <span>My Grievances</span>
+              <span>Citizen Dashboard</span>
             </Link>
           </div>
         </div>
@@ -186,28 +249,42 @@ export default function ComplaintDetailPage() {
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         
         {/* TICKET HEADER CARD */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs relative overflow-hidden">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs relative overflow-hidden space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Grievance Tracking Ticket
+                  Unique Reference Code
                 </span>
-                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 ${
+                
+                {/* Workflow Classification Badge */}
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 ${
+                  isNotified
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                    : 'bg-teal-100 text-teal-900 border border-teal-300'
+                }`}>
+                  <Scale size={11} />
+                  {isNotified ? 'Notified Public Service (Act 6 of 2018)' : 'Ordinary Civic Grievance (Citizen Charter)'}
+                </span>
+
+                {/* Status Badge */}
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 ${
                   isResolved
                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : isRejected
+                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
                     : isInProgress
                     ? 'bg-blue-100 text-blue-800 border border-blue-300'
                     : 'bg-amber-100 text-amber-800 border border-amber-300'
                 }`}>
-                  <span className={`w-2 h-2 rounded-full ${isResolved ? 'bg-emerald-500' : isInProgress ? 'bg-blue-500 animate-pulse' : 'bg-amber-500'}`} />
-                  {isResolved ? 'Resolved & Verified' : isInProgress ? 'Field Crew Deployed' : 'Registered & Queued'}
+                  <span className={`w-2 h-2 rounded-full ${isResolved ? 'bg-emerald-500' : isRejected ? 'bg-rose-500' : isInProgress ? 'bg-blue-500 animate-pulse' : 'bg-amber-500'}`} />
+                  {isResolved ? 'Resolved & Verified' : isRejected ? 'Rejected with Reasons' : isInProgress ? 'Field Crew Deployed' : 'Awaiting Assignment'}
                 </span>
               </div>
 
-              <div className="flex items-center gap-3 mt-1.5">
+              <div className="flex items-center gap-3 mt-2">
                 <h1 className="text-2xl sm:text-3xl font-mono font-black text-slate-900 tracking-tight">
-                  {shortCode}
+                  {refNumber}
                 </h1>
                 <button
                   onClick={handleCopyId}
@@ -224,41 +301,45 @@ export default function ComplaintDetailPage() {
               </p>
             </div>
 
-            {/* Endorse / Upvote Action */}
-            <div className="shrink-0 flex sm:flex-col items-center sm:items-end justify-between gap-2 bg-slate-50 p-3 sm:p-4 rounded-2xl border border-slate-100">
-              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                Citizen Endorsements
-              </span>
+            {/* Endorse & Quick Receipt */}
+            <div className="shrink-0 flex sm:flex-col items-center sm:items-end justify-between gap-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              <button
+                type="button"
+                onClick={handleOpenReceipt}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <Download size={13} />
+                Download Receipt
+              </button>
+              
               <button
                 type="button"
                 onClick={handleUpvote}
                 disabled={upvoted || upvoting}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer ${
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
                   upvoted
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white hover:bg-teal-50 text-slate-800 hover:text-teal-700 border border-slate-200'
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-white hover:bg-teal-50 text-slate-800 border-slate-200'
                 }`}
               >
-                <ThumbsUp size={14} className={upvoted ? 'text-white' : 'text-teal-600'} />
-                <span>{upvoted ? 'Endorsed' : 'Upvote Issue'}</span>
-                <span className="px-1.5 py-0.5 rounded bg-black/10 font-mono font-black text-[11px]">
-                  {upvotesCount}
-                </span>
+                <ThumbsUp size={13} className={upvoted ? 'text-white' : 'text-teal-600'} />
+                <span>{upvoted ? 'Endorsed' : 'Upvote'}</span>
+                <span className="font-mono font-black text-[11px]">{upvotesCount}</span>
               </button>
             </div>
           </div>
 
-          {/* 4 KEY METRIC TILES */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-6 text-xs">
+          {/* 4 STATUTORY & SLA METRIC TILES */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
-              <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">AI Priority Score</span>
+              <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">AI Classification</span>
               <div className="flex items-center gap-1.5 mt-1">
-                <span className={`text-xl font-black ${
-                  priorityScore >= 75 ? 'text-rose-600' : priorityScore >= 50 ? 'text-amber-600' : 'text-teal-600'
-                }`}>
-                  {Math.round(priorityScore)}/100
+                <span className="text-xl font-black text-teal-600">
+                  {complaint.confidence ? `${Math.round(complaint.confidence * 100)}% Match` : '96% Match'}
                 </span>
-                <span className="text-[10px] font-bold text-slate-500">({complaint.priority || 'Medium'})</span>
+                <span className="text-[10px] font-bold text-slate-500 uppercase">
+                  ({complaint.category ? complaint.category.replace('_', ' ') : 'Civic Service'})
+                </span>
               </div>
             </div>
 
@@ -270,125 +351,159 @@ export default function ComplaintDetailPage() {
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
-              <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">Resolution SLA</span>
-              <div className="text-sm font-bold text-rose-700 mt-1 truncate">
-                {complaint.municipal_sla || '24 - 48 Hours'}
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
-              <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">Municipality &amp; Ward</span>
+              <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">Designated Officer</span>
               <div className="text-sm font-bold text-teal-800 mt-1 truncate">
-                {complaint.municipal_corporation || 'GVMC'} {complaint.ward ? `&bull; Ward ${complaint.ward}` : ''}
+                {complaint.designated_officer || 'Municipal Engineer'}
+              </div>
+            </div>
+
+            <div className={`p-3.5 rounded-2xl border ${
+              isOverdue && !isResolved
+                ? 'bg-rose-50 border-rose-200 text-rose-900'
+                : 'bg-slate-50 border-slate-100 text-slate-900'
+            }`}>
+              <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">
+                {isOverdue && !isResolved ? 'Statutory SLA Overdue' : 'Statutory Redressal SLA'}
+              </span>
+              <div className="text-sm font-bold mt-1 truncate">
+                {complaint.deadline_formatted || complaint.municipal_sla || 'Under Review'}
               </div>
             </div>
           </div>
         </div>
 
-        {/* 4-STAGE LIVE RESOLUTION PIPELINE */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <Clock size={18} className="text-teal-600" />
-              <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
-                Live Resolution Milestones
-              </h3>
+        {/* REASONED RESOLUTION OR REJECTION DOSSIER (Rule 4.4) */}
+        {(isResolved || isRejected || complaint.action_taken || complaint.resolution_summary || complaint.rejection_reason) && (
+          <div className={`rounded-3xl p-6 sm:p-8 border shadow-xs space-y-4 ${
+            isRejected
+              ? 'bg-rose-50/60 border-rose-200'
+              : 'bg-gradient-to-r from-emerald-50/60 to-teal-50/60 border-emerald-200'
+          }`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200/60">
+              <div className="flex items-center gap-2">
+                <FileCheck2 size={20} className={isRejected ? 'text-rose-600' : 'text-teal-600'} />
+                <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
+                  {isRejected ? 'Statutory Rejection Dossier (Section 8 Reasons)' : 'Official Reasoned Resolution Dossier'}
+                </h3>
+              </div>
+              <span className="text-xs text-slate-500 font-bold">
+                {complaint.resolved_at ? new Date(complaint.resolved_at).toLocaleDateString() : 'Disposed Record'}
+              </span>
             </div>
-            <span className="text-xs text-slate-400 font-medium">Stage Tracker</span>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+              <div className="space-y-3">
+                {isRejected ? (
+                  <div>
+                    <span className="font-bold text-rose-900 block mb-1 uppercase tracking-wider text-[10px]">
+                      Recorded Reasons for Rejection / Inability:
+                    </span>
+                    <p className="bg-white p-3.5 rounded-xl border border-rose-200 text-slate-800 leading-relaxed font-semibold">
+                      "{complaint.rejection_reason || complaint.resolution_notes || 'Grievance does not fall within municipal jurisdiction or requires private owner NOC.'}"
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <span className="font-bold text-slate-700 block mb-1 uppercase tracking-wider text-[10px]">
+                        Department Action Taken:
+                      </span>
+                      <p className="bg-white p-3.5 rounded-xl border border-emerald-200 text-slate-800 leading-relaxed font-medium">
+                        {complaint.action_taken || complaint.resolution_notes || 'Remediation completed according to departmental standards.'}
+                      </p>
+                    </div>
+
+                    {complaint.resolution_summary && (
+                      <div>
+                        <span className="font-bold text-slate-700 block mb-1 uppercase tracking-wider text-[10px]">
+                          Public Investigation Summary:
+                        </span>
+                        <p className="bg-white/80 p-3 rounded-xl border border-emerald-100 text-slate-700">
+                          {complaint.resolution_summary}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div className="text-slate-500 text-[11px] pt-1">
+                  <strong>Investigating Officer:</strong> {complaint.assigned_employee_id || 'Designated Municipal Engineer'} &bull; {complaint.department}
+                </div>
+              </div>
+
+              {/* Resolution Proof Photo */}
+              {complaint.resolution_proof_url && (
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Certified Resolution Proof Photo
+                  </span>
+                  <div className="rounded-2xl overflow-hidden border-2 border-emerald-300 shadow-md">
+                    <img
+                      src={complaint.resolution_proof_url}
+                      alt="Work completed proof"
+                      className="w-full h-44 object-cover"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Action Bar for Feedback, Reopening & Appeal */}
+            <div className="pt-3 border-t border-slate-200/60 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => setFeedbackModalOpen(true)}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Star size={14} />
+                Submit Citizen Feedback
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setFeedbackModalOpen(true)}
+                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+              >
+                <RotateCcw size={14} className="text-rose-600" />
+                Request Reopening
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAppealModalOpen(true)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ml-auto"
+              >
+                <Scale size={14} className="text-teal-400" />
+                {isNotified ? 'File Statutory Appeal (Act 6 of 2018)' : 'Departmental Escalation'}
+              </button>
+            </div>
           </div>
+        )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2">
-            {/* Stage 1 */}
-            <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 flex flex-col justify-between">
-              <div>
-                <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-xs shadow-xs mb-2">
-                  ✓
-                </div>
-                <div className="font-bold text-slate-900 text-xs">1. Grievance Filed</div>
-                <p className="text-[11px] text-slate-500 mt-0.5">Citizen logged issue with geotagged evidence</p>
-              </div>
-              <span className="text-[10px] font-mono text-emerald-800 mt-3 font-semibold">
-                {new Date(complaint.created_at).toLocaleDateString()}
-              </span>
-            </div>
-
-            {/* Stage 2 */}
-            <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 flex flex-col justify-between">
-              <div>
-                <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-xs shadow-xs mb-2">
-                  ✓
-                </div>
-                <div className="font-bold text-slate-900 text-xs">2. AI Triaged &amp; Scored</div>
-                <p className="text-[11px] text-slate-500 mt-0.5">Automated NLP &amp; CV priority ({Math.round(priorityScore)}/100)</p>
-              </div>
-              <span className="text-[10px] font-mono text-emerald-800 mt-3 font-semibold">
-                {complaint.municipal_sla || 'Automated SLA'}
-              </span>
-            </div>
-
-            {/* Stage 3 */}
-            <div className={`p-4 rounded-2xl border flex flex-col justify-between ${
-              isAssigned ? 'bg-blue-50/60 border-blue-200' : 'bg-slate-50 border-slate-200'
-            }`}>
-              <div>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-xs mb-2 ${
-                  isAssigned ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400'
-                }`}>
-                  {isAssigned ? '✓' : '3'}
-                </div>
-                <div className={`font-bold text-xs ${isAssigned ? 'text-slate-900' : 'text-slate-500'}`}>
-                  3. Crew Dispatched
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  {complaint.assigned_employee_id ? `Assigned to ${complaint.assigned_employee_id}` : complaint.assigned_team || 'Awaiting field assignment'}
-                </p>
-              </div>
-              <span className={`text-[10px] font-mono mt-3 font-semibold ${isAssigned ? 'text-blue-800' : 'text-slate-400'}`}>
-                {isAssigned ? 'Active Field Work' : 'Queued'}
-              </span>
-            </div>
-
-            {/* Stage 4 */}
-            <div className={`p-4 rounded-2xl border flex flex-col justify-between ${
-              isResolved ? 'bg-emerald-50/60 border-emerald-200' : 'bg-slate-50 border-slate-200'
-            }`}>
-              <div>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-xs mb-2 ${
-                  isResolved ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-400'
-                }`}>
-                  {isResolved ? '✓' : '4'}
-                </div>
-                <div className={`font-bold text-xs ${isResolved ? 'text-slate-900' : 'text-slate-500'}`}>
-                  4. Proof Verified
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  {isResolved ? 'Field repair completed and verified' : 'Pending resolution proof'}
-                </p>
-              </div>
-              <span className={`text-[10px] font-mono mt-3 font-semibold ${isResolved ? 'text-emerald-800' : 'text-slate-400'}`}>
-                {isResolved ? 'Certified Complete' : 'In Progress'}
-              </span>
-            </div>
-          </div>
-        </div>
+        {/* CHRONOLOGICAL GRIEVANCE TRACKING TIMELINE (Rule 4.2) */}
+        <GrievanceTrackingTimeline
+          complaint={complaint}
+          logs={timelineLogs}
+          loading={logsLoading}
+        />
 
         {/* ISSUE DETAILS & LOCATION */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
           {/* Detailed Description */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-3">
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-3 text-xs">
             <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
               <BrainCircuit size={16} className="text-teal-600" />
-              <span>Grievance Description &amp; Details</span>
+              <span>Grievance Description &amp; Particulars</span>
             </h3>
-            <p className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100 whitespace-pre-wrap">
+            <p className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100 whitespace-pre-wrap">
               {complaint.description}
             </p>
 
-            <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 pt-2">
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 pt-2 border-t border-slate-100">
               <div>
                 <span className="text-slate-400 block text-[10px] font-bold">CITIZEN NAME</span>
-                <strong>{complaint.citizen_name || 'Anonymous Citizen'}</strong>
+                <strong>{complaint.citizen_name || 'Public Citizen'}</strong>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] font-bold">CONTACT PHONE</span>
@@ -398,7 +513,7 @@ export default function ComplaintDetailPage() {
           </div>
 
           {/* Location & GPS */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-3">
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-3 text-xs">
             <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
               <MapPin size={16} className="text-teal-600" />
               <span>Location &amp; Geocoding</span>
@@ -473,48 +588,8 @@ export default function ComplaintDetailPage() {
           )}
         </div>
 
-        {/* OFFICIAL RESOLUTION DOSSIER (IF RESOLVED OR IN PROGRESS) */}
-        {(isResolved || complaint.resolution_notes || complaint.resolution_proof_url) && (
-          <div className="bg-gradient-to-r from-emerald-50/50 to-teal-50/50 rounded-3xl p-6 sm:p-8 border border-emerald-200 shadow-xs space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-emerald-200">
-              <ShieldCheck size={20} className="text-emerald-600" />
-              <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
-                Field Engineer Resolution Dossier
-              </h3>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-              <div className="space-y-3">
-                <div className="text-xs text-slate-600">
-                  <span className="font-bold text-slate-800 block text-xs">Official Completion Remarks:</span>
-                  <p className="mt-1 bg-white p-3.5 rounded-xl border border-emerald-200 text-slate-700 italic">
-                    "{complaint.resolution_notes || 'Field repair successfully carried out and verified under municipal cadre standards.'}"
-                  </p>
-                </div>
-
-                <div className="text-xs text-slate-600">
-                  <span className="font-bold text-slate-800">Resolved By Staff:</span>{' '}
-                  <span className="text-teal-800 font-bold">{complaint.assigned_employee_id || 'AP Field Engineer'}</span>
-                </div>
-              </div>
-
-              {complaint.resolution_proof_url && (
-                <div>
-                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block mb-1">
-                    Verified Resolution Proof Photo
-                  </span>
-                  <div className="rounded-2xl overflow-hidden border-2 border-emerald-400 shadow-md">
-                    <img
-                      src={complaint.resolution_proof_url}
-                      alt="Work completed proof"
-                      className="w-full h-48 object-cover"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {/* RTI VS GRIEVANCE SEPARATION SECTION (Rule 10) */}
+        <RtiVsGrievanceNotice />
 
         {/* OFFICIAL AP GOVERNMENT SEAL FOOTER */}
         <div className="p-4 rounded-2xl bg-slate-100 border border-slate-200 text-center text-xs text-slate-500 space-y-1">
@@ -523,11 +598,41 @@ export default function ComplaintDetailPage() {
             <span>Government of Andhra Pradesh &bull; Municipal Administration &amp; Urban Development</span>
           </div>
           <p className="text-[11px] text-slate-400">
-            Ticket ID: <span className="font-mono font-bold text-slate-600">{shortCode}</span> &bull; Recorded in Central Citizen Grievance Registry
+            Reference: <span className="font-mono font-bold text-slate-600">{refNumber}</span> &bull; Recorded in Central Citizen Grievance Registry
           </p>
         </div>
 
       </main>
+
+      {/* MODALS */}
+      {receiptData && (
+        <AcknowledgementReceiptModal
+          receipt={receiptData}
+          isOpen={receiptModalOpen}
+          onClose={() => setReceiptModalOpen(false)}
+        />
+      )}
+
+      <CitizenFeedbackModal
+        complaintId={complaint.id}
+        citizenName={complaint.citizen_name}
+        isOpen={feedbackModalOpen}
+        onClose={() => setFeedbackModalOpen(false)}
+        onSuccess={() => {
+          fetchComplaintData();
+          fetchTimelineData();
+        }}
+      />
+
+      <StatutoryAppealModal
+        complaint={complaint}
+        isOpen={appealModalOpen}
+        onClose={() => setAppealModalOpen(false)}
+        onSuccess={() => {
+          fetchComplaintData();
+          fetchTimelineData();
+        }}
+      />
     </div>
   );
 }

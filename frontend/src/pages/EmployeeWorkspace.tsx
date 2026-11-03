@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, EmployeeRecord } from '../lib/api';
+import { api, EmployeeRecord, ActivityLogRecord, InvestigationRecord } from '../lib/api';
 import {
   LayoutGrid,
   FileText,
@@ -22,7 +22,6 @@ import {
   X,
   Flame,
   MapPin,
-  Clock,
   Check,
   RefreshCw,
   ExternalLink,
@@ -30,29 +29,43 @@ import {
   EyeOff,
   Lock,
   KeyRound,
-  Sparkles
+  Sparkles,
+  Scale,
+  History,
+  AlertTriangle,
+  ClipboardCheck,
+  AlertCircle
 } from 'lucide-react';
 import { verifyRepairResolutionProof, ResolutionVerificationResult } from '../lib/aiPhase3';
 
 interface ComplaintItem {
   id: string;
   rawId?: string;
+  grievanceRefNumber?: string;
   title?: string;
   category: string;
+  department?: string;
   location: string;
   landmark?: string;
   ward?: string;
   received: string;
-  status: 'New' | 'Under review' | 'In progress' | 'Resolved';
+  status: 'New' | 'Under review' | 'In progress' | 'Resolved' | 'Rejected' | 'Reopened' | 'Escalated';
   assignedTeam: string;
   assignedEmployeeId?: string;
   priority?: string;
   priorityScore?: number;
+  confidence?: number;
   upvotes?: number;
   isDuplicate?: boolean;
   defectType?: string;
   visualScore?: number;
   sla?: string;
+  deadlineFormatted?: string;
+  slaIsOverdue?: boolean;
+  isNotifiedService?: boolean;
+  designatedOfficer?: string;
+  appellateAuthority?: string;
+  rejectionReason?: string;
   resolutionNotes?: string;
   resolutionProofUrl?: string;
   locationLat?: number;
@@ -88,6 +101,27 @@ export default function EmployeeWorkspace() {
   const [colleagueSearch, setColleagueSearch] = useState('');
   const [selectedPinComplaint, setSelectedPinComplaint] = useState<ComplaintItem | null>(null);
 
+  // Structured Investigation & Compliance State
+  const [investigationModalOpen, setInvestigationModalOpen] = useState(false);
+  const [investigatingComplaint, setInvestigatingComplaint] = useState<ComplaintItem | null>(null);
+  const [siteInspectionConducted, setSiteInspectionConducted] = useState(true);
+  const [inspectionLocation, setInspectionLocation] = useState('');
+  const [investigationFindings, setInvestigationFindings] = useState('');
+  const [investigationActionTaken, setInvestigationActionTaken] = useState('');
+  const [investigationNextSteps, setInvestigationNextSteps] = useState('');
+  const [investigationStatus, setInvestigationStatus] = useState<'in_progress' | 'resolved' | 'rejected' | 'awaiting_verification'>('resolved');
+  const [investigationRejectionReason, setInvestigationRejectionReason] = useState('');
+  const [investigationPhoto, setInvestigationPhoto] = useState<string | null>(null);
+  const [submittingInvestigation, setSubmittingInvestigation] = useState(false);
+  const [investigationError, setInvestigationError] = useState('');
+
+  // Activity Audit History Drawer State
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
+  const [auditComplaint, setAuditComplaint] = useState<ComplaintItem | null>(null);
+  const [auditLogs, setAuditLogs] = useState<ActivityLogRecord[]>([]);
+  const [auditInvestigations, setAuditInvestigations] = useState<InvestigationRecord[]>([]);
+  const [loadingAudit, setLoadingAudit] = useState(false);
+
   // Resolution Modal State
   const [editingComplaint, setEditingComplaint] = useState<ComplaintItem | null>(null);
   const [editStatus, setEditStatus] = useState<ComplaintItem['status']>('In progress');
@@ -103,7 +137,7 @@ export default function EmployeeWorkspace() {
   const runAiVerification = async (proofUrl: string, comp?: ComplaintItem | null) => {
     setVerifyingWithAi(true);
     try {
-      const target = comp || editingComplaint;
+      const target = comp || editingComplaint || investigatingComplaint;
       const res = await verifyRepairResolutionProof(null, proofUrl, target?.defectType || target?.category);
       setAiVerification(res);
     } catch {}
@@ -180,12 +214,21 @@ export default function EmployeeWorkspace() {
       if (liveData) {
         const mapped: ComplaintItem[] = liveData.map((item: any) => {
           const shortCode = item.id.length > 8 ? `NXC-${item.id.slice(0, 6).toUpperCase()}` : item.id;
-          const statusLabel = item.status === 'pending' ? 'New' : item.status === 'in_progress' ? 'In progress' : 'Resolved';
+          const statusLabel =
+            item.status === 'pending' ? 'New' :
+            item.status === 'in_progress' ? 'In progress' :
+            item.status === 'resolved' ? 'Resolved' :
+            item.status === 'rejected' ? 'Rejected' :
+            item.status === 'reopened' ? 'Reopened' :
+            item.status === 'escalated' ? 'Escalated' :
+            'Under review';
           return {
             id: shortCode,
             rawId: item.id,
+            grievanceRefNumber: item.grievance_ref_number,
             title: item.title,
             category: (item.category || 'Roads').replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+            department: item.department,
             location: item.location_address || 'Coordinates provided',
             landmark: item.landmark,
             ward: item.ward,
@@ -195,11 +238,18 @@ export default function EmployeeWorkspace() {
             assignedEmployeeId: item.assigned_employee_id,
             priority: item.priority || 'Medium',
             priorityScore: item.priority_score,
+            confidence: item.confidence,
             upvotes: item.upvote_count || 1,
             isDuplicate: item.is_duplicate,
             defectType: item.defect_type,
             visualScore: item.visual_score,
             sla: item.municipal_sla,
+            deadlineFormatted: item.deadline_formatted,
+            slaIsOverdue: item.sla_is_overdue,
+            isNotifiedService: item.workflow_type === 'notified_service',
+            designatedOfficer: item.designated_officer,
+            appellateAuthority: item.appellate_authority,
+            rejectionReason: item.rejection_reason,
             resolutionNotes: item.resolution_notes,
             resolutionProofUrl: item.resolution_proof_url,
             locationLat: item.location_lat || 16.5062,
@@ -218,6 +268,116 @@ export default function EmployeeWorkspace() {
       }
     } catch (err) {
       console.warn('Could not load live backend data in employee workspace:', err);
+    }
+  };
+
+  // Open Structured Investigation Form
+  const handleOpenInvestigationModal = (complaint: ComplaintItem) => {
+    setInvestigatingComplaint(complaint);
+    setInspectionLocation(complaint.location || '');
+    setSiteInspectionConducted(true);
+    setInvestigationFindings('');
+    setInvestigationActionTaken(complaint.resolutionNotes || '');
+    setInvestigationNextSteps('');
+    setInvestigationStatus(complaint.status === 'Resolved' ? 'resolved' : 'in_progress');
+    setInvestigationRejectionReason(complaint.rejectionReason || '');
+    setInvestigationPhoto(complaint.resolutionProofUrl || null);
+    setInvestigationError('');
+    setAiVerification(null);
+    setInvestigationModalOpen(true);
+  };
+
+  // Submit Structured Investigation Form
+  const handleSubmitInvestigation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!investigatingComplaint) return;
+    setInvestigationError('');
+
+    // Validation: Mandatory resolution remarks for resolved status
+    if (investigationStatus === 'resolved') {
+      if (!investigationActionTaken.trim() || investigationActionTaken.trim().length < 8) {
+        setInvestigationError('Statutory Compliance Rule: Action taken and resolution remarks must be provided (minimum 8 characters) before marking as resolved.');
+        return;
+      }
+    }
+
+    // Validation: Mandatory rejection reason for rejected status (Sec 8 of Act 6 of 2018)
+    if (investigationStatus === 'rejected') {
+      if (!investigationRejectionReason.trim() || investigationRejectionReason.trim().length < 10) {
+        setInvestigationError('AP Public Services Act Sec 8: A reasoned order explaining the grounds of rejection must be recorded (minimum 10 characters).');
+        return;
+      }
+    }
+
+    const targetId = investigatingComplaint.rawId || investigatingComplaint.id;
+    setSubmittingInvestigation(true);
+    try {
+      // 1. Record structured investigation record
+      await api.recordInvestigation({
+        complaint_id: targetId,
+        employee_id: currentEmpCode,
+        employee_name: profile?.name || 'Assigned Cadre Officer',
+        investigation_performed: siteInspectionConducted ? 'yes' : 'no',
+        location_inspected: inspectionLocation,
+        findings: investigationFindings || 'Site inspected by cadre engineer; observations recorded.',
+        action_taken: investigationActionTaken,
+        supporting_evidence_urls: investigationPhoto ? [investigationPhoto] : undefined,
+        further_action_required: investigationNextSteps || undefined,
+        is_resolved: investigationStatus === 'resolved',
+        inability_reason: investigationStatus === 'rejected' ? investigationRejectionReason : undefined
+      });
+
+      // 2. Update status and remarks
+      await api.updateComplaintStatus(
+        targetId,
+        investigationStatus,
+        investigationActionTaken || undefined,
+        investigationPhoto || undefined,
+        currentEmpCode,
+        investigationStatus === 'rejected' ? investigationRejectionReason : undefined
+      );
+
+      // 3. Update local state
+      setComplaints((prev) =>
+        prev.map((c) =>
+          c.id === investigatingComplaint.id || c.rawId === investigatingComplaint.rawId
+            ? {
+                ...c,
+                status: (investigationStatus === 'resolved' ? 'Resolved' : investigationStatus === 'rejected' ? 'Rejected' : 'In progress') as any,
+                resolutionNotes: investigationActionTaken || c.resolutionNotes,
+                resolutionProofUrl: investigationPhoto || c.resolutionProofUrl,
+                rejectionReason: investigationRejectionReason || c.rejectionReason
+              }
+            : c
+        )
+      );
+
+      setInvestigationModalOpen(false);
+      fetchLiveWorkspaceData();
+    } catch (err: any) {
+      setInvestigationError(err.message || 'Failed to submit investigation record.');
+    } finally {
+      setSubmittingInvestigation(false);
+    }
+  };
+
+  // Open Activity & Audit History Modal
+  const handleOpenAuditModal = async (complaint: ComplaintItem) => {
+    setAuditComplaint(complaint);
+    setAuditModalOpen(true);
+    setLoadingAudit(true);
+    const targetId = complaint.rawId || complaint.id;
+    try {
+      const [logs, investigations] = await Promise.all([
+        api.getActivityLogs(targetId).catch(() => []),
+        api.getInvestigations(targetId).catch(() => [])
+      ]);
+      setAuditLogs(logs);
+      setAuditInvestigations(investigations);
+    } catch (err) {
+      console.warn('Failed to load audit history', err);
+    } finally {
+      setLoadingAudit(false);
     }
   };
 
@@ -295,6 +455,12 @@ export default function EmployeeWorkspace() {
         return 'bg-teal-50 text-teal-700 border border-teal-200';
       case 'Resolved':
         return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+      case 'Rejected':
+        return 'bg-rose-50 text-rose-700 border border-rose-200';
+      case 'Reopened':
+        return 'bg-purple-50 text-purple-700 border border-purple-200';
+      case 'Escalated':
+        return 'bg-red-100 text-red-800 border border-red-300 font-bold';
       default:
         return 'bg-slate-50 text-slate-700 border border-slate-200';
     }
@@ -640,74 +806,124 @@ export default function EmployeeWorkspace() {
                     <table className="w-full text-left text-xs">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-500 font-semibold">
-                          <th className="pb-3">Case ID</th>
-                          <th className="pb-3">Category</th>
+                          <th className="pb-3">Reference / ID</th>
+                          <th className="pb-3">Category & Scope</th>
                           <th className="pb-3">Priority</th>
                           <th className="pb-3">Location & Landmark</th>
+                          <th className="pb-3">Statutory SLA / Due</th>
                           <th className="pb-3">Status</th>
                           <th className="pb-3">Assigned Staff</th>
-                          <th className="pb-3 text-right pr-2">Action</th>
+                          <th className="pb-3 text-right pr-2">Investigation & Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {filteredComplaints.length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="py-8 text-center text-slate-400">
+                            <td colSpan={8} className="py-8 text-center text-slate-400">
                               <p className="font-bold text-slate-700">No work orders currently assigned</p>
                               <p className="text-[11px] text-slate-400 mt-0.5">Switch to "Department Queue" tab to pick up unassigned civic complaints.</p>
                             </td>
                           </tr>
                         ) : (
-                          filteredComplaints.slice(0, 6).map((item) => (
-                            <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                              <td className="py-3.5 font-bold text-slate-900">{item.id}</td>
-                              <td className="py-3.5 text-slate-700">{item.category}</td>
-                              <td className="py-3.5">
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    item.priority?.toLowerCase() === 'critical'
-                                      ? 'bg-red-100 text-red-800 border border-red-200'
-                                      : item.priority?.toLowerCase() === 'high'
-                                      ? 'bg-orange-100 text-orange-800 border border-orange-200'
-                                      : 'bg-amber-100 text-amber-800 border border-amber-200'
-                                  }`}
-                                >
-                                  {item.priority?.toLowerCase() === 'critical' && <Flame size={10} />}
-                                  {item.priority || 'Medium'} {item.priorityScore ? `(${Math.round(item.priorityScore)})` : ''}
-                                </span>
-                              </td>
-                              <td className="py-3.5 text-slate-600 max-w-[200px] truncate">
-                                {item.location} {item.landmark ? `(${item.landmark})` : ''}
-                              </td>
-                              <td className="py-3.5">
-                                <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${getStatusBadge(item.status)}`}>
-                                  {item.status}
-                                </span>
-                              </td>
-                              <td className="py-3.5 text-slate-700 font-medium">
-                                {item.assignedEmployeeId === currentEmpCode ? (
-                                  <span className="text-teal-700 font-bold">You ({currentEmpCode})</span>
-                                ) : (
-                                  item.assignedEmployeeId || 'Unassigned'
-                                )}
-                              </td>
-                              <td className="py-3.5 text-right pr-2">
-                                <button
-                                  onClick={() => {
-                                    setEditingComplaint(item);
-                                    setEditStatus(item.status === 'Resolved' ? 'Resolved' : 'In progress');
-                                    setEditTeam(item.assignedTeam);
-                                    setResolutionNotes(item.resolutionNotes || '');
-                                    setResolutionProof(item.resolutionProofUrl || null);
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-teal-50 hover:bg-teal-600 text-teal-700 hover:text-white rounded-lg font-bold text-xs transition border border-teal-200 cursor-pointer"
-                                >
-                                  <CheckCircle2 size={12} />
-                                  <span>Update & Proof</span>
-                                </button>
-                              </td>
-                            </tr>
-                          ))
+                          filteredComplaints.slice(0, 6).map((item) => {
+                            const refCode = item.grievanceRefNumber || item.id;
+                            return (
+                              <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="py-3.5">
+                                  <div className="font-mono font-bold text-slate-900">{refCode}</div>
+                                  <div className="text-[10px] text-slate-400">{item.id}</div>
+                                </td>
+                                <td className="py-3.5">
+                                  <div className="font-bold text-slate-800">{item.category}</div>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    {item.isNotifiedService ? (
+                                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold flex items-center gap-0.5">
+                                        <Scale size={9} />
+                                        <span>Act 6/2018</span>
+                                      </span>
+                                    ) : (
+                                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-medium">
+                                        Charter
+                                      </span>
+                                    )}
+                                    {item.confidence && (
+                                      <span className="text-[9px] text-emerald-600 font-mono">
+                                        {Math.round(item.confidence * 100)}%
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-3.5">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
+                                      item.priority?.toLowerCase() === 'critical'
+                                        ? 'bg-red-100 text-red-800 border border-red-200'
+                                        : item.priority?.toLowerCase() === 'high'
+                                        ? 'bg-orange-100 text-orange-800 border border-orange-200'
+                                        : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                    }`}
+                                  >
+                                    {item.priority?.toLowerCase() === 'critical' && <Flame size={10} />}
+                                    {item.priority || 'Medium'} {item.priorityScore ? `(${Math.round(item.priorityScore)})` : ''}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 text-slate-600 max-w-[180px] truncate">
+                                  <div>{item.location}</div>
+                                  {item.landmark && <div className="text-[10px] text-slate-400 truncate">{item.landmark}</div>}
+                                </td>
+                                <td className="py-3.5">
+                                  <div className="text-slate-700 font-medium text-[11px]">{item.deadlineFormatted || item.sla || 'Within 7 AP Days'}</div>
+                                  {item.slaIsOverdue ? (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 animate-pulse">
+                                      <AlertTriangle size={10} /> Overdue
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-emerald-600">On Track</span>
+                                  )}
+                                </td>
+                                <td className="py-3.5">
+                                  <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${getStatusBadge(item.status)}`}>
+                                    {item.status}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 text-slate-700 font-medium">
+                                  {item.assignedEmployeeId === currentEmpCode ? (
+                                    <span className="text-teal-700 font-bold">You ({currentEmpCode})</span>
+                                  ) : (
+                                    item.assignedEmployeeId || 'Unassigned'
+                                  )}
+                                </td>
+                                <td className="py-3.5 text-right pr-2">
+                                  <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                    <button
+                                      onClick={() => handleOpenInvestigationModal(item)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-teal-50 hover:bg-teal-600 text-teal-700 hover:text-white rounded-lg font-bold text-xs transition border border-teal-200 cursor-pointer"
+                                      title="Record Structured Investigation / Disposal"
+                                    >
+                                      <ClipboardCheck size={12} />
+                                      <span>Investigate</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleOpenAuditModal(item)}
+                                      className="inline-flex items-center p-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs transition"
+                                      title="View Activity & Investigation Logs"
+                                    >
+                                      <History size={13} />
+                                    </button>
+
+                                    <Link
+                                      to={`/complaint/${item.rawId || item.id}`}
+                                      className="inline-flex items-center p-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs transition"
+                                      title="Open Full Case Dossier"
+                                    >
+                                      <ExternalLink size={13} />
+                                    </Link>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
@@ -799,83 +1015,131 @@ export default function EmployeeWorkspace() {
                       <p className="text-xs text-slate-400 mt-1">Try clearing your search query or selecting a different status filter.</p>
                     </div>
                   ) : (
-                    filteredComplaints.map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-teal-300 hover:shadow-md transition-all flex flex-col justify-between space-y-3"
-                      >
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono font-black text-sm text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
-                              {item.id}
-                            </span>
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${getStatusBadge(item.status)}`}>
-                              {item.status}
-                            </span>
-                          </div>
-
-                          <h4 className="text-sm font-bold text-slate-900 line-clamp-2">
-                            {item.title || `${item.category} Incident at ${item.location}`}
-                          </h4>
-
-                          <div className="space-y-1 text-xs text-slate-600">
-                            <div className="flex items-center gap-1.5">
-                              <MapPin size={13} className="text-teal-600 shrink-0" />
-                              <span className="truncate">{item.location}</span>
+                    filteredComplaints.map((item) => {
+                      const refCode = item.grievanceRefNumber || item.id;
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-teal-300 hover:shadow-md transition-all flex flex-col justify-between space-y-3"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono font-black text-xs text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                                  {refCode}
+                                </span>
+                                {item.isNotifiedService ? (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold flex items-center gap-1">
+                                    <Scale size={10} />
+                                    <span>Act 6/2018 Notified</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                                    Citizen Charter
+                                  </span>
+                                )}
+                              </div>
+                              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${getStatusBadge(item.status)}`}>
+                                {item.status}
+                              </span>
                             </div>
-                            {item.landmark && (
-                              <div className="text-[11px] text-slate-500 pl-5">
-                                Landmark: <strong>{item.landmark}</strong> {item.ward ? `(Ward ${item.ward})` : ''}
+
+                            <h4 className="text-sm font-bold text-slate-900 line-clamp-2">
+                              {item.title || `${item.category} Incident at ${item.location}`}
+                            </h4>
+
+                            {item.description && (
+                              <p className="text-xs text-slate-600 line-clamp-2 bg-white/70 p-2 rounded-lg border border-slate-100">
+                                {item.description}
+                              </p>
+                            )}
+
+                            <div className="space-y-1 text-xs text-slate-600">
+                              <div className="flex items-center gap-1.5">
+                                <MapPin size={13} className="text-teal-600 shrink-0" />
+                                <span className="truncate">{item.location}</span>
+                              </div>
+                              {item.landmark && (
+                                <div className="text-[11px] text-slate-500 pl-5">
+                                  Landmark: <strong>{item.landmark}</strong> {item.ward ? `(Ward ${item.ward})` : ''}
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between text-[11px] pt-1">
+                                <span className="text-slate-500 font-medium">
+                                  Due: <strong>{item.deadlineFormatted || item.sla || 'Within 7 AP Working Days'}</strong>
+                                </span>
+                                {item.slaIsOverdue ? (
+                                  <span className="font-bold text-red-600 flex items-center gap-1 animate-pulse">
+                                    <AlertTriangle size={11} />
+                                    <span>Overdue Default</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-emerald-700 font-semibold">Statutory Target Active</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {item.resolutionProofUrl && (
+                              <div className="mt-2 pt-2 border-t border-slate-200">
+                                <span className="text-[10px] font-bold text-emerald-700 uppercase block mb-1">Attached Completion Proof</span>
+                                <img
+                                  src={item.resolutionProofUrl}
+                                  alt="Resolution evidence"
+                                  className="w-24 h-24 object-cover rounded-xl border border-emerald-300 shadow-2xs"
+                                />
                               </div>
                             )}
-                            {item.sla && (
-                              <div className="flex items-center gap-1.5 text-[11px] text-amber-700 pl-5">
-                                <Clock size={11} />
-                                <span>SLA: {item.sla}</span>
+
+                            {item.resolutionNotes && (
+                              <p className="text-xs text-slate-600 bg-white p-2.5 rounded-xl border border-slate-200 italic">
+                                "{item.resolutionNotes}"
+                              </p>
+                            )}
+
+                            {item.rejectionReason && (
+                              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                                <span className="font-bold block text-[10px] uppercase">Statutory Rejection Grounds:</span>
+                                <span>{item.rejectionReason}</span>
                               </div>
                             )}
                           </div>
 
-                          {item.resolutionProofUrl && (
-                            <div className="mt-2 pt-2 border-t border-slate-200">
-                              <span className="text-[10px] font-bold text-emerald-700 uppercase block mb-1">Attached Completion Proof</span>
-                              <img
-                                src={item.resolutionProofUrl}
-                                alt="Resolution evidence"
-                                className="w-24 h-24 object-cover rounded-xl border border-emerald-300 shadow-2xs"
-                              />
+                          {/* Card Footer Actions */}
+                          <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2 flex-wrap">
+                            <div className="text-[11px] font-bold text-slate-500">
+                              Priority: <span className="text-rose-600">{item.priority || 'Medium'}</span> {item.priorityScore ? `(${Math.round(item.priorityScore)}/100)` : ''}
                             </div>
-                          )}
 
-                          {item.resolutionNotes && (
-                            <p className="text-xs text-slate-600 bg-white p-2.5 rounded-xl border border-slate-200 italic">
-                              "{item.resolutionNotes}"
-                            </p>
-                          )}
-                        </div>
+                            <div className="flex items-center gap-1.5 ml-auto">
+                              <button
+                                onClick={() => handleOpenAuditModal(item)}
+                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs transition flex items-center gap-1"
+                                title="Audit Trail"
+                              >
+                                <History size={12} />
+                                <span>Audit</span>
+                              </button>
 
-                        {/* Card Footer Actions */}
-                        <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
-                          <div className="text-[11px] font-bold text-slate-500">
-                            Priority: <span className="text-rose-600">{item.priority || 'Medium'}</span> {item.priorityScore ? `(${Math.round(item.priorityScore)}/100)` : ''}
+                              <Link
+                                to={`/complaint/${item.rawId || item.id}`}
+                                className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs transition"
+                                title="Open Full Dossier"
+                              >
+                                <ExternalLink size={13} />
+                              </Link>
+
+                              <button
+                                onClick={() => handleOpenInvestigationModal(item)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs shadow-xs transition cursor-pointer"
+                              >
+                                <ClipboardCheck size={13} />
+                                <span>Investigate</span>
+                              </button>
+                            </div>
                           </div>
-
-                          <button
-                            onClick={() => {
-                              setEditingComplaint(item);
-                              setEditStatus(item.status === 'Resolved' ? 'Resolved' : 'In progress');
-                              setEditTeam(item.assignedTeam);
-                              setResolutionNotes(item.resolutionNotes || '');
-                              setResolutionProof(item.resolutionProofUrl || null);
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs shadow-xs transition cursor-pointer"
-                          >
-                            <CheckCircle2 size={13} />
-                            <span>Update Resolution</span>
-                          </button>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -1610,6 +1874,364 @@ export default function EmployeeWorkspace() {
               >
                 <CheckCircle2 size={14} />
                 <span>{savingResolution ? 'Saving...' : 'Submit Proof & Update Work Order'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* 5.2 STRUCTURED INVESTIGATION & COMPLIANCE MODAL               */}
+      {/* ============================================================ */}
+      {investigationModalOpen && investigatingComplaint && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white text-slate-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 my-8 space-y-4 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-teal-50 text-teal-700">
+                    <ClipboardCheck size={18} />
+                  </span>
+                  <h3 className="text-base font-black text-slate-900">
+                    Field Investigation & Statutory Disposal
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Ref: <span className="font-mono font-bold text-teal-800">{investigatingComplaint.grievanceRefNumber || investigatingComplaint.id}</span> &bull; {investigatingComplaint.category}
+                </p>
+              </div>
+              <button
+                onClick={() => setInvestigationModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Legal Framework Notice Banner */}
+            <div className={`p-3 rounded-2xl text-xs flex items-start gap-2.5 ${
+              investigatingComplaint.isNotifiedService
+                ? 'bg-indigo-50 border border-indigo-200 text-indigo-900'
+                : 'bg-slate-100 border border-slate-200 text-slate-700'
+            }`}>
+              <Scale size={16} className={investigatingComplaint.isNotifiedService ? 'text-indigo-600 mt-0.5' : 'text-slate-500 mt-0.5'} />
+              <div>
+                <span className="font-bold block">
+                  {investigatingComplaint.isNotifiedService
+                    ? 'AP Public Services Delivery Guarantee Act, 2017 (Act No. 6 of 2018) Statutory Case'
+                    : 'Municipal Citizen Charter & PGRS Grievance Handling Guidelines'}
+                </span>
+                <span className="text-[11px] leading-relaxed">
+                  {investigatingComplaint.isNotifiedService
+                    ? 'Disposal and reasoned orders are subject to statutory Section 8 compliance. Rejections require mandatory written reasons.'
+                    : 'Grievance resolution will be verified by the supervising division officer and citizen feedback.'}
+                </span>
+              </div>
+            </div>
+
+            {investigationError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+                <AlertCircle size={15} />
+                <span>{investigationError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitInvestigation} className="space-y-4">
+              {/* Site Inspection Check */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                  <span>Site Inspection Conducted?</span>
+                  <input
+                    type="checkbox"
+                    checked={siteInspectionConducted}
+                    onChange={(e) => setSiteInspectionConducted(e.target.checked)}
+                    className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500"
+                  />
+                </label>
+                {siteInspectionConducted && (
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Inspection Location / Landmarks Inspected
+                    </label>
+                    <input
+                      type="text"
+                      value={inspectionLocation}
+                      onChange={(e) => setInspectionLocation(e.target.value)}
+                      placeholder="e.g. Ring Road Junction, near Ward 12 water main"
+                      className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500 outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Investigation Findings */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Investigation Findings & Site Observations *
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  value={investigationFindings}
+                  onChange={(e) => setInvestigationFindings(e.target.value)}
+                  placeholder="Record observations: extent of damage, water pipeline leakage diameter, cable fault root cause..."
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none"
+                />
+              </div>
+
+              {/* Status Outcome Selection */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Disposal / Work Order Status *
+                </label>
+                <select
+                  value={investigationStatus}
+                  onChange={(e) => setInvestigationStatus(e.target.value as any)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none font-bold"
+                >
+                  <option value="resolved">Resolved (Work Completed on Site)</option>
+                  <option value="in_progress">In Progress (Active Repair / Works in Progress)</option>
+                  <option value="awaiting_verification">Awaiting Verification (Completed, Pending Citizen/Supervisor Check)</option>
+                  <option value="rejected">Rejected (Inadmissible / Out of Jurisdiction / Invalid Order)</option>
+                </select>
+              </div>
+
+              {/* Mandatory Resolution Remarks (for Resolved) */}
+              {investigationStatus === 'resolved' && (
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-emerald-800">
+                    Mandatory Resolution Action & Remarks *
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={investigationActionTaken}
+                    onChange={(e) => setInvestigationActionTaken(e.target.value)}
+                    placeholder="Specify exact action taken: patch work completed, new pipeline valve installed, light bulb replaced and tested..."
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-emerald-300 bg-emerald-50/30 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none resize-none font-medium"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    Note: Resolution remarks are permanently recorded in the civic audit ledger and visible to citizens.
+                  </p>
+                </div>
+              )}
+
+              {/* Mandatory Rejection Grounds (for Rejected - Sec 8 of Act 6/2018) */}
+              {investigationStatus === 'rejected' && (
+                <div className="space-y-1 p-3 bg-rose-50 rounded-2xl border border-rose-200">
+                  <label className="block text-xs font-bold text-rose-900">
+                    Reasoned Grounds for Rejection (Sec 8 Mandatory Order) *
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={investigationRejectionReason}
+                    onChange={(e) => setInvestigationRejectionReason(e.target.value)}
+                    placeholder="Specify reasoned legal grounds: e.g. Private property not covered by municipal maintenance; duplicate of registered complaint #AP-GNT-2026-NXC042; outside AP municipal jurisdiction..."
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-rose-300 bg-white focus:ring-2 focus:ring-rose-500 outline-none resize-none font-medium"
+                  />
+                </div>
+              )}
+
+              {/* If In Progress or Awaiting Verification: Next Steps */}
+              {(investigationStatus === 'in_progress' || investigationStatus === 'awaiting_verification') && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Action Taken & Next Scheduled Steps
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={investigationActionTaken}
+                    onChange={(e) => setInvestigationActionTaken(e.target.value)}
+                    placeholder="e.g. Excavation completed; asphalt batch arriving tomorrow 10 AM. Team scheduled for paving."
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none resize-none"
+                  />
+                </div>
+              )}
+
+              {/* Resolution Proof Photo Upload */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Upload Site Investigation / Repair Proof Photo
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        const resultStr = reader.result as string;
+                        setInvestigationPhoto(resultStr);
+                        runAiVerification(resultStr, investigatingComplaint);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"
+                />
+
+                {investigationPhoto && (
+                  <div className="mt-2 space-y-2">
+                    <div className="relative inline-block">
+                      <img src={investigationPhoto} alt="Site proof" className="w-28 h-28 object-cover rounded-xl border-2 border-teal-500 shadow-sm" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInvestigationPhoto(null);
+                          setAiVerification(null);
+                        }}
+                        className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-1 shadow cursor-pointer"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+
+                    {verifyingWithAi && (
+                      <div className="text-xs text-teal-700 font-bold flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-teal-600 border-t-transparent" />
+                        <span>Running Computer Vision Resolution Audit...</span>
+                      </div>
+                    )}
+
+                    {aiVerification && (
+                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs space-y-1">
+                        <div className="flex items-center justify-between text-emerald-900 font-bold">
+                          <span className="flex items-center gap-1.5">
+                            <Sparkles size={14} className="text-emerald-600" />
+                            <span>AI Vision Verification</span>
+                          </span>
+                          <span className="bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded text-[10px] font-bold">
+                            {aiVerification.qualityGrade} &bull; {aiVerification.confidenceScore}%
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-emerald-800">{aiVerification.auditSummary}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setInvestigationModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingInvestigation}
+                  className="px-5 py-2.5 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <ClipboardCheck size={14} />
+                  <span>{submittingInvestigation ? 'Saving Record...' : 'Submit Investigation & Update Status'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* 5.4 ACTIVITY AUDIT & INVESTIGATION HISTORY DRAWER             */}
+      {/* ============================================================ */}
+      {auditModalOpen && auditComplaint && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white text-slate-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <History size={17} className="text-teal-700" />
+                  <span>Activity Audit & Investigation History</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Ref: <span className="font-mono font-bold text-teal-800">{auditComplaint.grievanceRefNumber || auditComplaint.id}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setAuditModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-4 space-y-4">
+              {loadingAudit ? (
+                <div className="py-12 text-center text-slate-400">
+                  <div className="animate-spin rounded-full h-6 w-6 border-2 border-teal-600 border-t-transparent mx-auto mb-2" />
+                  <p className="text-xs">Loading immutable audit ledger...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Previous Structured Investigations */}
+                  {auditInvestigations.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-teal-900">
+                        Site Investigations ({auditInvestigations.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {auditInvestigations.map((inv) => (
+                          <div key={inv.id} className="p-3 bg-teal-50/50 rounded-2xl border border-teal-100 text-xs space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-teal-950">{inv.employee_name || 'Cadre Officer'} ({inv.employee_id || 'AP-STAFF'})</span>
+                              <span className="text-[10px] text-slate-500">{new Date(inv.created_at).toLocaleString()}</span>
+                            </div>
+                            <p className="text-slate-700"><strong>Findings:</strong> {inv.findings}</p>
+                            {inv.action_taken && <p className="text-slate-700"><strong>Action Taken:</strong> {inv.action_taken}</p>}
+                            {inv.supporting_evidence_urls && inv.supporting_evidence_urls[0] && (
+                              <img src={inv.supporting_evidence_urls[0]} alt="Site evidence" className="w-20 h-20 object-cover rounded-lg border mt-1" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Immutable Activity Logs Feed */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                      Lifecycle Audit Events ({auditLogs.length})
+                    </h4>
+                    {auditLogs.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-4 text-center">No previous activity logs recorded.</p>
+                    ) : (
+                      <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                        {auditLogs.map((log) => (
+                          <div key={log.id} className="relative text-xs space-y-0.5">
+                            <span className="absolute -left-6 top-1 w-2.5 h-2.5 rounded-full bg-teal-600 border-2 border-white ring-1 ring-teal-200" />
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-800 capitalize">
+                                {(log.action || '').replace(/_/g, ' ')}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                {new Date(log.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="text-slate-600">{log.comments || 'Lifecycle transition recorded'}</p>
+                            <span className="text-[10px] text-teal-700 font-semibold block">
+                              By {log.actor_name || 'System'} ({log.actor_role})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 text-right">
+              <button
+                onClick={() => setAuditModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition"
+              >
+                Close Audit View
               </button>
             </div>
           </div>

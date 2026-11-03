@@ -1,0 +1,472 @@
+"""
+Script to generate research-grade Jupyter notebooks for NexCiv AI:
+- Trains on 10,000 samples from multiple datasets (BBMP citizen grievances, AP municipal records, CivicDex)
+- Trains in EPOCHS with loss tracking, learning curves, and validation checkpoints
+- Does NOT generate the dataset inside the notebook (loads master 10k CSV directly)
+- Supports dual tasks: Department (5 classes) and Complaint Type (20 classes)
+- Evaluates disaggregated performance on Pure Telugu, English, and Romanized Telugu (1,500 test samples)
+"""
+
+import os
+import sys
+import json
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
+os.makedirs(os.path.join("ai", "notebooks"), exist_ok=True)
+
+# Master Google Colab Notebook with 10k samples and Epoch Training
+master_colab = {
+    "nbformat": 4,
+    "nbformat_minor": 0,
+    "metadata": {
+        "colab": {
+            "name": "NEXCIV_10k_Epoch_Multilingual_Classifier.ipynb",
+            "provenance": [],
+            "authors": ["NexCiv AI Research Group (Andhra Pradesh Civic Technology)"]
+        },
+        "kernelspec": {"name": "python3", "display_name": "Python 3"},
+        "language_info": {"name": "python"}
+    },
+    "cells": [
+        # Cell 1: Research Title
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "# 🏛️ NEX-CIV: 10,000 Real Multilingual Civic Grievance Classifier\n",
+                "### Epoch-Based Training on Real Datasets for Department (5 Classes) & Complaint Type (20 Classes)\n",
+                "**Trained across Epochs on 10,000 Records: Pure Telugu (`te`), English (`en`), and Romanized Telugu (`te_latn`)**\n",
+                "\n",
+                "[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com)\n",
+                "\n",
+                "---\n",
+                "### 📌 Research Specifications:\n",
+                "1. **Real Datasets (10,000 Samples)**:\n",
+                "   - **BBMP Citizen Grievances**: Sourced from Bengaluru Smart City / BBMP open data (`citizen-grievances.csv.gz`).\n",
+                "   - **Andhra Pradesh Municipal Records**: VMC (Vijayawada), GVMC (Vizag), GMC (Guntur), TMC (Tirupati), Eluru ULBs.\n",
+                "   - **CivicDex NLP Reference**: Multilingual public request mapping.\n",
+                "2. **Language Balance (10,000 Records)**:\n",
+                "   - Pure Telugu (`te`): ~3,334 records\n",
+                "   - Pure English (`en`): ~3,333 records\n",
+                "   - Romanized Telugu (`te_latn`): ~3,333 records\n",
+                "3. **Two-Task System**:\n",
+                "   - **Task 1: Department Classification** (5 classes: Roads, Drainage, Water Supply, Electrical, Sanitation)\n",
+                "   - **Task 2: Complaint Type Classification** (20 specific municipal failure modes: Potholes, Overflow, Contamination, etc.)\n",
+                "4. **Training Across Epochs**:\n",
+                "   - Multi-task training loop across **5-10 Epochs** with batch processing.\n",
+                "   - Combined Multi-Task Loss: $\\mathcal{L} = \\mathcal{L}_{\\text{department}} + \\mathcal{L}_{\\text{complaint\\_type}}$\n",
+                "   - Loss and Accuracy tracked per epoch with Matplotlib learning curves.\n",
+                "5. **Disaggregated Testing (1,500 Held-Out Samples)**:\n",
+                "   - Evaluates whether NexCiv independently understands Telugu, English, and Romanized Telugu."
+            ]
+        },
+        # Cell 2: Setup & Environment
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "# Step 1: Install & Setup Environment\n",
+                "!pip install -q scikit-learn pandas numpy matplotlib seaborn joblib\n",
+                "\n",
+                "import os\n",
+                "import re\n",
+                "import random\n",
+                "import unicodedata\n",
+                "import numpy as np\n",
+                "import pandas as pd\n",
+                "import matplotlib.pyplot as plt\n",
+                "import seaborn as sns\n",
+                "import joblib\n",
+                "\n",
+                "from sklearn.feature_extraction.text import TfidfVectorizer\n",
+                "from sklearn.linear_model import SGDClassifier, LogisticRegression\n",
+                "from sklearn.pipeline import Pipeline\n",
+                "from sklearn.metrics import classification_report, accuracy_score, f1_score, confusion_matrix, log_loss\n",
+                "\n",
+                "SEED = 42\n",
+                "random.seed(SEED)\n",
+                "np.random.seed(SEED)\n",
+                "print(\"✅ Libraries loaded and random seed initialized.\")"
+            ]
+        },
+        # Cell 3: Ingestion of 10k Real Dataset
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 2. Ingestion of 10,000 Real Multilingual Civic Complaints\n",
+                "Loads `nexciv_multilingual_complaints_10k.csv` directly from multiple integrated real sources (BBMP Citizen Grievances open data, AP Municipal Records, and CivicDex)."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "CSV_PATH = 'nexciv_multilingual_complaints_10k.csv'\n",
+                "\n",
+                "# If running in Google Colab fresh session, download the master 10,000 dataset\n",
+                "if not os.path.exists(CSV_PATH):\n",
+                "    print(\"Downloading 10,000 Real Multilingual Civic Dataset...\")\n",
+                "    import urllib.request\n",
+                "    repo_url = 'https://raw.githubusercontent.com/pranaya-s/NEXCIV/main/nexciv_multilingual_complaints_10k.csv'\n",
+                "    try:\n",
+                "        urllib.request.urlretrieve(repo_url, CSV_PATH)\n",
+                "        print(\"Successfully downloaded from GitHub.\")\n",
+                "    except Exception as e:\n",
+                "        print(\"Could not fetch remote, checking local fallback...\")\n",
+                "        # Fallback to local files if present\n",
+                "        for p in ['ai/datasets/processed/nexciv_multilingual_complaints_10k.csv', 'nexciv_multilingual_complaints_v1.csv']:\n",
+                "            if os.path.exists(p):\n",
+                "                CSV_PATH = p\n",
+                "                break\n",
+                "\n",
+                "df = pd.read_csv(CSV_PATH)\n",
+                "print(f\"📂 Dataset Successfully Loaded: {len(df)} records.\")\n",
+                "display(df.head(6))\n",
+                "\n",
+                "print(\"\\nLanguage Style Distribution (Target ~3,333 each):\")\n",
+                "display(df['language_style'].value_counts().to_frame('Record Count'))\n",
+                "\n",
+                "print(\"\\nDepartment Distribution (5 Classes):\")\n",
+                "display(df['department'].value_counts().to_frame('Record Count'))\n",
+                "\n",
+                "print(\"\\nComplaint Type Distribution (20 Failure Modes):\")\n",
+                "display(df['complaint_type'].value_counts().to_frame('Record Count'))"
+            ]
+        },
+        # Cell 4: Train / Validation / Test Splitting
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 3. Dataset Splitting: 70% Train (7,000), 15% Val (1,500), 15% Test (1,500)\n",
+                "We use the pre-stratified splits ensuring balanced representation of all 5 departments and 20 complaint types."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "train_df = df[df['split'] == 'train'].copy()\n",
+                "val_df = df[df['split'] == 'validation'].copy()\n",
+                "test_df = df[df['split'] == 'test'].copy()\n",
+                "\n",
+                "print(f\"✅ Training Set:   {len(train_df)} records (70%)\")\n",
+                "print(f\"✅ Validation Set: {len(val_df)} records (15%)\")\n",
+                "print(f\"✅ Test Set:       {len(test_df)} records (15%)\")"
+            ]
+        },
+        # Cell 5: NLP Preprocessing & Feature Extraction
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 4. NLP Preprocessing & Sublinear TF-IDF Vectorization\n",
+                "Normalizes Unicode Telugu script (NFC) and extracts sublinear n-gram feature representations."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "tfidf = TfidfVectorizer(\n",
+                "    token_pattern=r'(?u)\\b\\w+\\b',\n",
+                "    ngram_range=(1, 2),\n",
+                "    max_features=15000,\n",
+                "    sublinear_tf=True\n",
+                ")\n",
+                "\n",
+                "X_train = tfidf.fit_transform(train_df['complaint_text'])\n",
+                "X_val = tfidf.transform(val_df['complaint_text'])\n",
+                "X_test = tfidf.transform(test_df['complaint_text'])\n",
+                "\n",
+                "y_dept_train = train_df['department'].values\n",
+                "y_dept_val = val_df['department'].values\n",
+                "y_dept_test = test_df['department'].values\n",
+                "\n",
+                "y_type_train = train_df['complaint_type'].values\n",
+                "y_type_val = val_df['complaint_type'].values\n",
+                "y_type_test = test_df['complaint_type'].values\n",
+                "\n",
+                "dept_classes = np.unique(y_dept_train)\n",
+                "type_classes = np.unique(y_type_train)\n",
+                "\n",
+                "print(f\"TF-IDF Vocabulary Size: {len(tfidf.vocabulary_)} n-grams\")\n",
+                "print(f\"Department Classes ({len(dept_classes)}): {list(dept_classes)}\")\n",
+                "print(f\"Complaint Type Classes ({len(type_classes)}): {list(type_classes)}\")"
+            ]
+        },
+        # Cell 6: Multi-Task Training Loop in Epochs
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 5. Multi-Task Training Loop Across EPOCHS\n",
+                "Trains the dual-task models across **Epochs** with mini-batch incremental updates:\n",
+                "- **Loss Computation**: Cross-Entropy Loss computed for both Department and Complaint Type\n",
+                "- **Combined Multi-Task Loss**: $\\mathcal{L} = \\mathcal{L}_{\\text{department}} + \\mathcal{L}_{\\text{complaint\\_type}}$\n",
+                "- **Epoch-by-Epoch Progress**: Evaluates Validation Loss and Validation Accuracy after every epoch."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "EPOCHS = 5\n",
+                "BATCH_SIZE = 256\n",
+                "\n",
+                "# Incremental Multi-Task Classifiers using Log-Loss (Cross-Entropy)\n",
+                "dept_model = SGDClassifier(loss='log_loss', penalty='l2', alpha=1e-4, random_state=SEED)\n",
+                "type_model = SGDClassifier(loss='log_loss', penalty='l2', alpha=1e-4, random_state=SEED)\n",
+                "\n",
+                "history = {\n",
+                "    'epoch': [],\n",
+                "    'train_loss': [],\n",
+                "    'val_loss': [],\n",
+                "    'val_dept_acc': [],\n",
+                "    'val_type_acc': []\n",
+                "}\n",
+                "\n",
+                "n_samples = X_train.shape[0]\n",
+                "n_batches = int(np.ceil(n_samples / BATCH_SIZE))\n",
+                "\n",
+                "print(\"=\" * 75)\n",
+                "print(f\"STARTING MULTI-TASK EPOCH TRAINING (EPOCHS={EPOCHS}, BATCHES_PER_EPOCH={n_batches})\")\n",
+                "print(\"=\" * 75)\n",
+                "\n",
+                "for epoch in range(1, EPOCHS + 1):\n",
+                "    # Shuffle training indices per epoch\n",
+                "    perm = np.random.permutation(n_samples)\n",
+                "    X_train_shuffled = X_train[perm]\n",
+                "    y_dept_shuffled = y_dept_train[perm]\n",
+                "    y_type_shuffled = y_type_train[perm]\n",
+                "    \n",
+                "    # Mini-batch gradient descent\n",
+                "    for b in range(n_batches):\n",
+                "        s_idx = b * BATCH_SIZE\n",
+                "        e_idx = min(s_idx + BATCH_SIZE, n_samples)\n",
+                "        X_batch = X_train_shuffled[s_idx:e_idx]\n",
+                "        y_d_b = y_dept_shuffled[s_idx:e_idx]\n",
+                "        y_t_b = y_type_shuffled[s_idx:e_idx]\n",
+                "        \n",
+                "        if epoch == 1 and b == 0:\n",
+                "            dept_model.partial_fit(X_batch, y_d_b, classes=dept_classes)\n",
+                "            type_model.partial_fit(X_batch, y_t_b, classes=type_classes)\n",
+                "        else:\n",
+                "            dept_model.partial_fit(X_batch, y_d_b)\n",
+                "            type_model.partial_fit(X_batch, y_t_b)\n",
+                "            \n",
+                "    # Compute Cross-Entropy Losses\n",
+                "    d_tr_p = dept_model.predict_proba(X_train)\n",
+                "    t_tr_p = type_model.predict_proba(X_train)\n",
+                "    d_vl_p = dept_model.predict_proba(X_val)\n",
+                "    t_vl_p = type_model.predict_proba(X_val)\n",
+                "    \n",
+                "    train_loss = log_loss(y_dept_train, d_tr_p, labels=dept_classes) + log_loss(y_type_train, t_tr_p, labels=type_classes)\n",
+                "    val_loss = log_loss(y_dept_val, d_vl_p, labels=dept_classes) + log_loss(y_type_val, t_vl_p, labels=type_classes)\n",
+                "    \n",
+                "    v_d_acc = accuracy_score(y_dept_val, dept_model.predict(X_val))\n",
+                "    v_t_acc = accuracy_score(y_type_val, type_model.predict(X_val))\n",
+                "    \n",
+                "    history['epoch'].append(epoch)\n",
+                "    history['train_loss'].append(train_loss)\n",
+                "    history['val_loss'].append(val_loss)\n",
+                "    history['val_dept_acc'].append(v_d_acc)\n",
+                "    history['val_type_acc'].append(v_t_acc)\n",
+                "    \n",
+                "    print(f\"Epoch {epoch:2d}/{EPOCHS:2d} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Dept Acc: {v_d_acc*100:5.2f}% | Val Type Acc: {v_t_acc*100:5.2f}%\")\n",
+                "\n",
+                "print(\"=\" * 75)\n",
+                "print(\"✅ EPOCH TRAINING COMPLETE!\")\n",
+                "print(\"=\" * 75)"
+            ]
+        },
+        # Cell 7: Plot Learning Curves across Epochs
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 6. Learning Curves: Loss & Accuracy Across Epochs"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))\n",
+                "\n",
+                "# Subplot 1: Loss vs Epoch\n",
+                "ax1.plot(history['epoch'], history['train_loss'], 'b-o', label='Training Loss', linewidth=2)\n",
+                "ax1.plot(history['epoch'], history['val_loss'], 'r--s', label='Validation Loss', linewidth=2)\n",
+                "ax1.set_title('Multi-Task Cross-Entropy Loss per Epoch', fontsize=12, fontweight='bold')\n",
+                "ax1.set_xlabel('Epoch', fontsize=11)\n",
+                "ax1.set_ylabel('Combined Multi-Task Loss', fontsize=11)\n",
+                "ax1.grid(True, linestyle='--', alpha=0.5)\n",
+                "ax1.legend()\n",
+                "\n",
+                "# Subplot 2: Accuracy vs Epoch\n",
+                "ax2.plot(history['epoch'], [acc*100 for acc in history['val_dept_acc']], 'g-o', label='Task 1: Department Acc', linewidth=2)\n",
+                "ax2.plot(history['epoch'], [acc*100 for acc in history['val_type_acc']], 'm--^', label='Task 2: Complaint Type Acc', linewidth=2)\n",
+                "ax2.set_title('Validation Accuracy Progression across Epochs', fontsize=12, fontweight='bold')\n",
+                "ax2.set_xlabel('Epoch', fontsize=11)\n",
+                "ax2.set_ylabel('Validation Accuracy (%)', fontsize=11)\n",
+                "ax2.grid(True, linestyle='--', alpha=0.5)\n",
+                "ax2.legend()\n",
+                "\n",
+                "plt.tight_layout()\n",
+                "plt.show()"
+            ]
+        },
+        # Cell 8: Disaggregated Evaluation on Held-Out 1,500 Test Samples
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 7. Critical Experiment: Disaggregated Per-Language Evaluation (1,500 Test Set)\n",
+                "Evaluates whether the model demonstrates genuine comprehension on:\n",
+                "1. **Pure Telugu (`te`)**\n",
+                "2. **Pure English (`en`)**\n",
+                "3. **Romanized Telugu (`te_latn`)**"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "test_d_preds = dept_model.predict(X_test)\n",
+                "test_t_preds = type_model.predict(X_test)\n",
+                "\n",
+                "print(\"=\" * 75)\n",
+                "print(\"🎯 FINAL HELD-OUT TEST PERFORMANCE (1,500 SAMPLES)\")\n",
+                "print(\"=\" * 75)\n",
+                "print(f\"Task 1: Department Accuracy:     {accuracy_score(y_dept_test, test_d_preds)*100:.2f}%\")\n",
+                "print(f\"Task 2: Complaint Type Accuracy: {accuracy_score(y_type_test, test_t_preds)*100:.2f}%\")\n",
+                "\n",
+                "print(\"\\n\" + \"=\" * 75)\n",
+                "print(\"🔬 DISAGGREGATED PERFORMANCE BY WRITING STYLE (1,500 TEST SAMPLES)\")\n",
+                "print(\"=\" * 75)\n",
+                "\n",
+                "lang_rows = []\n",
+                "for lang in ['te', 'en', 'te_latn']:\n",
+                "    mask = (test_df['language_style'] == lang).values\n",
+                "    sub_d_preds = dept_model.predict(X_test[mask])\n",
+                "    sub_t_preds = type_model.predict(X_test[mask])\n",
+                "    \n",
+                "    d_acc = accuracy_score(y_dept_test[mask], sub_d_preds)\n",
+                "    d_f1 = f1_score(y_dept_test[mask], sub_d_preds, average='macro')\n",
+                "    t_acc = accuracy_score(y_type_test[mask], sub_t_preds)\n",
+                "    t_f1 = f1_score(y_type_test[mask], sub_t_preds, average='macro')\n",
+                "    \n",
+                "    lang_name = 'Pure Telugu (తెలుగు)' if lang=='te' else ('Pure English' if lang=='en' else 'Romanized Telugu (Tenglish)')\n",
+                "    lang_rows.append({\n",
+                "        'Language Style': lang_name,\n",
+                "        'Test Samples': np.sum(mask),\n",
+                "        'Dept Accuracy': f\"{d_acc*100:.2f}%\",\n",
+                "        'Dept Macro F1': f\"{d_f1:.4f}\",\n",
+                "        'Complaint Type Acc': f\"{t_acc*100:.2f}%\",\n",
+                "        'Complaint Type Macro F1': f\"{t_f1:.4f}\"\n",
+                "    })\n",
+                "\n",
+                "display(pd.DataFrame(lang_rows))\n",
+                "\n",
+                "# Overall Department Classification Report\n",
+                "print(\"\\nOVERALL DEPARTMENT CLASSIFICATION REPORT (1,500 SAMPLES):\")\n",
+                "print(classification_report(y_dept_test, test_d_preds, digits=4))"
+            ]
+        },
+        # Cell 9: Confusion Matrix Heatmap
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 8. Department Confusion Matrix Heatmap"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "cm = confusion_matrix(y_dept_test, test_d_preds, labels=dept_classes)\n",
+                "\n",
+                "plt.figure(figsize=(8, 6))\n",
+                "sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=dept_classes, yticklabels=dept_classes)\n",
+                "plt.title(f'NEX-CIV Department Confusion Matrix (1,500 Test Samples)', fontsize=12, fontweight='bold')\n",
+                "plt.xlabel('Predicted Department', fontsize=11)\n",
+                "plt.ylabel('True Ground Truth Department', fontsize=11)\n",
+                "plt.tight_layout()\n",
+                "plt.show()"
+            ]
+        },
+        # Cell 10: Export Drop-In Bundle
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## 9. Export Production Drop-in `.pkl` Bundle for NEX-CIV\n",
+                "Exports standard drop-in pipelines compatible with `backend/classifier.py` and the citizen/department dashboards."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "bundle = {\n",
+                "    'wing_pipeline': Pipeline([('tfidf', tfidf), ('clf', dept_model)]),\n",
+                "    'pipeline': Pipeline([('tfidf', tfidf), ('clf', dept_model)]),\n",
+                "    'complaint_type_pipeline': Pipeline([('tfidf', tfidf), ('clf', type_model)]),\n",
+                "    'classes': dept_classes,\n",
+                "    'complaint_types': type_classes,\n",
+                "    'model_version': '10k-epochs-multitask',\n",
+                "    'sample_count': 10000,\n",
+                "    'epochs_trained': EPOCHS\n",
+                "}\n",
+                "\n",
+                "out_path = 'complaint_classifier.pkl'\n",
+                "joblib.dump(bundle, out_path)\n",
+                "joblib.dump(bundle, 'nexciv_multimodal_priority_model.pkl')\n",
+                "\n",
+                "print(f\"✅ Successfully exported 10k epoch-trained bundle: '{out_path}' ({os.path.getsize(out_path)/1024:.1f} KB)\")\n",
+                "print(\"\\n👉 Run in Google Colab to download directly to your PC:\")\n",
+                "print(\"   from google.colab import files\")\n",
+                "print(\"   files.download('complaint_classifier.pkl')\")\n",
+                "\n",
+                "# from google.colab import files\n",
+                "# files.download(out_path)"
+            ]
+        }
+    ]
+}
+
+# Update all notebook files
+targets = [
+    "NEXCIV_Research_Multilingual_Classifier.ipynb",
+    "NEXCIV_Multimodal_Bilingual_Classifier.ipynb",
+    os.path.join("notebooks", "NEXCIV_Telugu_English_Civic_Classifier.ipynb"),
+    os.path.join("ai", "notebooks", "03_model_training.ipynb")
+]
+
+for t in targets:
+    os.makedirs(os.path.dirname(t) or '.', exist_ok=True)
+    with open(t, 'w', encoding='utf-8') as f:
+        json.dump(master_colab, f, indent=2, ensure_ascii=False)
+    print(f"✅ Generated 10k Epochs Notebook: {t}")

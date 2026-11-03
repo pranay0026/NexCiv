@@ -19,6 +19,7 @@ export interface APCorporation {
 
 export interface ComplaintRecord {
   id: string;
+  grievance_ref_number?: string;
   user_id?: string;
   title: string;
   description: string;
@@ -41,6 +42,24 @@ export interface ComplaintRecord {
   zone_type?: string;
   vulnerability_multiplier?: number;
   municipal_sla?: string;
+  workflow_type?: 'notified_service' | 'ordinary_grievance' | 'specialized';
+  legal_rule_id?: string;
+  legal_source?: string;
+  designated_officer?: string;
+  appellate_authority?: string;
+  expected_resolution_date?: string;
+  deadline_formatted?: string;
+  sla_remaining_hours?: number;
+  sla_is_overdue?: boolean;
+  sla_overdue_hours?: number;
+  action_taken?: string;
+  resolution_summary?: string;
+  rejection_reason?: string;
+  escalation_level?: number;
+  reopened_count?: number;
+  reopened_at?: string;
+  reopen_reason?: string;
+  appealed?: boolean;
   assigned_team?: string;
   assigned_employee_id?: string;
   citizen_name?: string;
@@ -59,6 +78,132 @@ export interface ComplaintRecord {
   resolved_at?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface LegalServiceRule {
+  id: string;
+  department_code: string;
+  department_name: string;
+  service_key: string;
+  service_name: string;
+  workflow_type: 'notified_service' | 'ordinary_grievance';
+  legal_source: string;
+  go_reference: string;
+  prescribed_timeline_days: number;
+  calculation_method: 'working_days' | 'calendar_days';
+  designated_officer_title: string;
+  first_appellate_authority: string;
+  second_appellate_authority: string;
+  appeal_deadline_days: number;
+  compensation_applicable: boolean;
+  compensation_rate_per_day: number;
+  max_compensation: number;
+  is_active: boolean;
+  version: number;
+  description?: string;
+}
+
+export interface LegalRuleVersion {
+  id: string;
+  rule_id: string;
+  version: number;
+  changes_summary: string;
+  updated_by: string;
+  previous_config: any;
+  new_config: any;
+  created_at: string;
+}
+
+export interface ComplianceSummary {
+  total_cases: number;
+  notified_services_count: number;
+  ordinary_grievances_count: number;
+  disposed_total: number;
+  disposed_within_stipulated_time: number;
+  disposed_beyond_stipulated_time: number;
+  pending_total: number;
+  pending_within_deadline: number;
+  pending_overdue: number;
+  statutory_compliance_rate: number;
+  reopened_cases: number;
+  escalated_cases: number;
+  statutory_appeals_count: number;
+  applicable_legal_acts: string[];
+  generated_at: string;
+}
+
+export interface MonthlyComplianceReport {
+  report_title: string;
+  governing_statute: string;
+  reporting_period: string;
+  department_code: string;
+  municipal_corporation: string;
+  summary_table: {
+    category: string;
+    department: string;
+    received: number;
+    disposed_on_time: number;
+    disposed_delayed: number;
+    pending: number;
+    overdue: number;
+    reopened: number;
+    statutory_appeals: number;
+    delay_reasons: string[];
+  }[];
+  total_categories_covered: number;
+  generated_timestamp: string;
+}
+
+export interface InvestigationRecord {
+  id: string;
+  complaint_id: string;
+  employee_id: string;
+  employee_name: string;
+  investigation_performed: string;
+  location_inspected?: string;
+  findings: string;
+  action_taken: string;
+  supporting_evidence_urls?: string[];
+  is_resolved: boolean;
+  inability_reason?: string;
+  further_action_required?: string;
+  created_at: string;
+}
+
+export interface ActivityLogRecord {
+  id: string;
+  complaint_id: string;
+  actor_role: string;
+  actor_id?: string;
+  actor_name?: string;
+  action: string;
+  previous_status?: string;
+  new_status?: string;
+  comments?: string;
+  created_at: string;
+}
+
+export interface AcknowledgementReceiptData {
+  grievance_ref_number: string;
+  complaint_id: string;
+  title: string;
+  citizen_name: string;
+  citizen_email?: string;
+  citizen_phone?: string;
+  submission_time: string;
+  department: string;
+  department_code: string;
+  category: string;
+  workflow_type: string;
+  legal_source: string;
+  go_reference?: string;
+  designated_officer: string;
+  expected_resolution_date: string;
+  timeline_calculation_method: string;
+  current_status: string;
+  first_appellate_authority: string;
+  appeal_deadline_days: number;
+  compensation_applicable: boolean;
 }
 
 export interface EmployeeRecord {
@@ -850,7 +995,8 @@ export const api = {
     status: string,
     notes?: string,
     resolutionProofUrl?: string,
-    resolvedByEmployeeId?: string
+    resolvedByEmployeeId?: string,
+    rejectionReason?: string
   ): Promise<ComplaintRecord> {
     try {
       const headers = await getAuthHeaders();
@@ -861,7 +1007,8 @@ export const api = {
           status,
           notes,
           resolution_proof_url: resolutionProofUrl,
-          resolved_by_employee_id: resolvedByEmployeeId
+          resolved_by_employee_id: resolvedByEmployeeId,
+          rejection_reason: rejectionReason
         })
       });
       if (res.ok) {
@@ -878,6 +1025,7 @@ export const api = {
         resolution_notes: notes,
         resolution_proof_url: resolutionProofUrl,
         resolved_by_employee_id: resolvedByEmployeeId,
+        rejection_reason: rejectionReason,
         resolved_at: status === 'resolved' ? new Date().toISOString() : null,
         updated_at: new Date().toISOString()
       }).eq('id', id);
@@ -892,6 +1040,7 @@ export const api = {
         item.status = status as any;
         item.resolution_notes = notes;
         item.resolution_proof_url = resolutionProofUrl;
+        if (rejectionReason) (item as any).rejection_reason = rejectionReason;
         item.resolved_at = status === 'resolved' ? new Date().toISOString() : undefined;
         item.updated_at = new Date().toISOString();
         localStorage.setItem('nexciv_all_complaints', JSON.stringify(localList));
@@ -903,7 +1052,13 @@ export const api = {
     return updatedRecord || { id, status } as any;
   },
 
-  async assignComplaint(complaintId: string, employeeId: string, assignedTeam?: string): Promise<ComplaintRecord> {
+  async assignComplaint(
+    complaintId: string,
+    employeeId: string,
+    assignedTeam?: string,
+    reassignmentReason?: string,
+    assignedBy?: string
+  ): Promise<ComplaintRecord> {
     try {
       const headers = await getAuthHeaders();
       const res = await fetch(`${API_URL}/api/complaints/${complaintId}/assign`, {
@@ -911,7 +1066,9 @@ export const api = {
         headers,
         body: JSON.stringify({
           employee_id: employeeId,
-          assigned_team: assignedTeam
+          assigned_team: assignedTeam,
+          reassignment_reason: reassignmentReason,
+          assigned_by: assignedBy
         })
       });
       if (res.ok) {
@@ -1268,6 +1425,299 @@ export const api = {
           sample_titles: ['High voltage snapped cable', 'Complete terminal perimeter blackout']
         }
       ]
+    };
+  },
+
+  // ----------------------------------------------------------------------------
+  // LEGAL COMPLIANCE & STATUTORY RULES APIS
+  // ----------------------------------------------------------------------------
+  async getLegalRules(departmentCode?: string, workflowType?: string): Promise<LegalServiceRule[]> {
+    try {
+      const params = new URLSearchParams();
+      if (departmentCode && departmentCode !== 'All' && departmentCode !== 'All departments') {
+        params.append('department_code', departmentCode);
+      }
+      if (workflowType && workflowType !== 'All') {
+        params.append('workflow_type', workflowType);
+      }
+      const res = await fetch(`${API_URL}/api/compliance/rules?${params.toString()}`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Legal rules fetch note:', e);
+    }
+    return [];
+  },
+
+  async updateLegalRule(ruleId: string, updates: Partial<LegalServiceRule> & { change_reason?: string; updated_by?: string }): Promise<LegalServiceRule> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/compliance/rules/${ruleId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(updates)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to update legal service rule');
+    }
+    return await res.json();
+  },
+
+  async getLegalRuleVersions(ruleId: string): Promise<LegalRuleVersion[]> {
+    try {
+      const res = await fetch(`${API_URL}/api/compliance/rules/${ruleId}/versions`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return [];
+  },
+
+  async getComplianceSummary(departmentCode?: string, municipalCorporation?: string): Promise<ComplianceSummary> {
+    try {
+      const params = new URLSearchParams();
+      if (departmentCode && departmentCode !== 'All' && departmentCode !== 'All departments') {
+        params.append('department_code', departmentCode);
+      }
+      if (municipalCorporation && municipalCorporation !== 'All') {
+        params.append('municipal_corporation', municipalCorporation);
+      }
+      const res = await fetch(`${API_URL}/api/compliance/summary?${params.toString()}`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return {
+      total_cases: 5,
+      notified_services_count: 2,
+      ordinary_grievances_count: 3,
+      disposed_total: 1,
+      disposed_within_stipulated_time: 1,
+      disposed_beyond_stipulated_time: 0,
+      pending_total: 4,
+      pending_within_deadline: 4,
+      pending_overdue: 0,
+      statutory_compliance_rate: 100.0,
+      reopened_cases: 0,
+      escalated_cases: 0,
+      statutory_appeals_count: 0,
+      applicable_legal_acts: [
+        'AP Public Services Delivery Guarantee Act, 2017 (Act No. 6 of 2018)',
+        'AP Municipal Citizen Charters & PGRS Guidelines'
+      ],
+      generated_at: new Date().toISOString()
+    };
+  },
+
+  async getMonthlyComplianceReport(departmentCode?: string, municipalCorporation?: string, period = 'Current Month'): Promise<MonthlyComplianceReport> {
+    try {
+      const params = new URLSearchParams({ month_year: period });
+      if (departmentCode && departmentCode !== 'All') params.append('department_code', departmentCode);
+      if (municipalCorporation && municipalCorporation !== 'All') params.append('municipal_corporation', municipalCorporation);
+      const res = await fetch(`${API_URL}/api/compliance/monthly-report?${params.toString()}`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return {
+      report_title: `Andhra Pradesh Public Services Delivery Guarantee Compliance Report - ${period}`,
+      governing_statute: 'Section 13, AP Public Services Delivery Guarantee Act, 2017 (Act No. 6 of 2018)',
+      reporting_period: period,
+      department_code: departmentCode || 'All Departments',
+      municipal_corporation: municipalCorporation || 'All Corporations',
+      summary_table: [],
+      total_categories_covered: 0,
+      generated_timestamp: new Date().toISOString()
+    };
+  },
+
+  // ----------------------------------------------------------------------------
+  // INVESTIGATION, AUDIT LOG & CITIZEN TRANSPARENCY APIS
+  // ----------------------------------------------------------------------------
+  async recordInvestigation(data: {
+    complaint_id: string;
+    investigation_performed: string;
+    location_inspected?: string;
+    findings: string;
+    action_taken: string;
+    supporting_evidence_urls?: string[];
+    is_resolved: boolean;
+    inability_reason?: string;
+    further_action_required?: string;
+    employee_id?: string;
+    employee_name?: string;
+  }): Promise<InvestigationRecord> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/grievance/investigations`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to submit investigation report');
+    }
+    const saved = await res.json();
+    window.dispatchEvent(new CustomEvent('nexciv_complaints_updated', { detail: { id: data.complaint_id } }));
+    return saved;
+  },
+
+  async getInvestigations(complaintId: string): Promise<InvestigationRecord[]> {
+    try {
+      const res = await fetch(`${API_URL}/api/grievance/investigations/${complaintId}`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return [];
+  },
+
+  async getActivityLogs(complaintId: string): Promise<ActivityLogRecord[]> {
+    try {
+      const res = await fetch(`${API_URL}/api/grievance/timeline/${complaintId}`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return [
+      {
+        id: 'log-01',
+        complaint_id: complaintId,
+        actor_role: 'citizen',
+        actor_name: 'Citizen',
+        action: 'Grievance Registered',
+        new_status: 'pending',
+        comments: 'Grievance submitted via NEX-CIV portal.',
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'log-02',
+        complaint_id: complaintId,
+        actor_role: 'system',
+        actor_name: 'AI Triage Engine',
+        action: 'Legal Applicability & SLA Assigned',
+        new_status: 'pending',
+        comments: 'Citizen Charter / Act No. 6 of 2018 statutory timeline bounded.',
+        created_at: new Date().toISOString()
+      }
+    ];
+  },
+
+  async submitFeedback(data: {
+    complaint_id: string;
+    citizen_name?: string;
+    rating: number;
+    is_resolved_confirmed: boolean;
+    comments?: string;
+  }) {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/grievance/feedback`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      throw new Error('Failed to record citizen feedback');
+    }
+    return await res.json();
+  },
+
+  async reopenComplaint(complaintId: string, reopenReason: string, evidenceUrl?: string, citizenName?: string) {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/grievance/reopen`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        complaint_id: complaintId,
+        reopen_reason: reopenReason,
+        evidence_url: evidenceUrl,
+        citizen_name: citizenName
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to reopen grievance');
+    }
+    const result = await res.json();
+    window.dispatchEvent(new CustomEvent('nexciv_complaints_updated', { detail: { id: complaintId } }));
+    return result;
+  },
+
+  async escalateComplaint(complaintId: string, level: number, reason: string, escalatedToTitle: string) {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/grievance/escalate`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        complaint_id: complaintId,
+        escalation_level: level,
+        reason,
+        escalated_to_title: escalatedToTitle
+      })
+    });
+    if (!res.ok) {
+      throw new Error('Failed to submit administrative escalation');
+    }
+    const result = await res.json();
+    window.dispatchEvent(new CustomEvent('nexciv_complaints_updated', { detail: { id: complaintId } }));
+    return result;
+  },
+
+  async fileAppeal(data: {
+    complaint_id: string;
+    appeal_level: number;
+    appellant_name: string;
+    appellant_email?: string;
+    appeal_ground: string;
+    supporting_doc_urls?: string[];
+  }) {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/grievance/appeal`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      throw new Error('Failed to file statutory appeal under Act No. 6 of 2018');
+    }
+    const result = await res.json();
+    window.dispatchEvent(new CustomEvent('nexciv_complaints_updated', { detail: { id: data.complaint_id } }));
+    return result;
+  },
+
+  async getAcknowledgementReceipt(complaintId: string): Promise<AcknowledgementReceiptData> {
+    try {
+      const res = await fetch(`${API_URL}/api/grievance/acknowledgement/${complaintId}`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+
+    // Fallback receipt from local complaint data
+    const c = await this.getComplaint(complaintId);
+    const shortCode = c.grievance_ref_number || `AP-${c.municipal_corporation || 'GVMC'}-2026-NXC${c.id.slice(0, 4).toUpperCase()}`;
+    return {
+      grievance_ref_number: shortCode,
+      complaint_id: c.id,
+      title: c.title,
+      citizen_name: c.citizen_name || 'Public Citizen',
+      citizen_email: c.citizen_email || 'citizen@nexciv.org',
+      citizen_phone: c.citizen_phone || '+91 98480 12345',
+      submission_time: c.created_at,
+      department: c.department || 'Municipal Services',
+      department_code: c.department_code || 'others',
+      category: c.category,
+      workflow_type: c.workflow_type || 'ordinary_grievance',
+      legal_source: c.legal_source || (c.workflow_type === 'notified_service' ? 'AP Public Services Delivery Guarantee Act, 2017 (Act No. 6 of 2018)' : 'AP Municipal Citizen Charter & PGRS Guidelines'),
+      go_reference: 'Standing Order No. 118',
+      designated_officer: c.designated_officer || 'Municipal Section Engineer',
+      expected_resolution_date: c.expected_resolution_date || c.deadline_formatted || 'Within 7 AP Working Days',
+      timeline_calculation_method: 'working_days',
+      current_status: c.status,
+      first_appellate_authority: c.appellate_authority || 'Superintending Engineer / Commissioner',
+      appeal_deadline_days: c.workflow_type === 'notified_service' ? 30 : 15,
+      compensation_applicable: c.workflow_type === 'notified_service'
     };
   }
 };

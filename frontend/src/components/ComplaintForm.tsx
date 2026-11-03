@@ -1,26 +1,30 @@
 import { useState, useRef, useEffect } from 'react';
-import { api, AP_CORPORATIONS, APCorporation } from '../lib/api';
+import { api, AP_CORPORATIONS, APCorporation, AcknowledgementReceiptData } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
+import AcknowledgementReceiptModal from './AcknowledgementReceiptModal';
 import {
   MapPin,
   Send,
   Loader2,
   X,
-  AlertTriangle,
-  Flame,
-  Clock,
-  CheckCircle,
   Navigation,
   Camera,
   Layers,
   ThumbsUp,
   Sparkles,
   CheckCheck,
-  Mail,
-  Phone,
   User,
   Building2,
-  Plus
+  Plus,
+  Download,
+  Scale,
+  Mic,
+  MicOff,
+  Video,
+  RefreshCw,
+  Languages,
+  Square
 } from 'lucide-react';
 
 export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: () => void }) {
@@ -28,6 +32,12 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   
+  // Language & Voice State
+  const [speechLang, setSpeechLang] = useState<'te-IN' | 'en-IN'>('te-IN');
+  const [isListening, setIsListening] = useState(false);
+  const [activeSpeechField, setActiveSpeechField] = useState<'title' | 'description' | null>(null);
+  const recognitionRef = useRef<any>(null);
+
   // AP Municipal Details
   const [corporations, setCorporations] = useState<APCorporation[]>(AP_CORPORATIONS);
   const [selectedCorp, setSelectedCorp] = useState(profile?.municipalCorporation || 'GVMC');
@@ -39,8 +49,13 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
   const [citizenEmail, setCitizenEmail] = useState(profile?.email || '');
   const [citizenPhone, setCitizenPhone] = useState(profile?.phone || '+91 98480 12345');
 
-  // Multi-Photo State
+  // Multi-Photo & Camera State
   const [images, setImages] = useState<string[]>([]);
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -57,25 +72,32 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
     }).catch(() => {});
   }, []);
 
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [receiptDetails, setReceiptDetails] = useState<{
     id: string;
+    rawId?: string;
+    refNumber: string;
+    department: string;
+    category: string;
+    workflowType: string;
+    expectedDate: string;
     sla: string;
     emailSent: boolean;
     smsSent: boolean;
+    receiptData: AcknowledgementReceiptData;
   } | null>(null);
 
   const [location, setLocation] = useState('');
   const [locationLat, setLocationLat] = useState<number | null>(null);
   const [locationLng, setLocationLng] = useState<number | null>(null);
 
+  // Classification & Category State (Priority Score completely removed from Citizen UI)
   const [category, setCategory] = useState('');
   const [categoryLabel, setCategoryLabel] = useState('');
-  const [priority, setPriority] = useState('Medium');
-  const [priorityScore, setPriorityScore] = useState<number | null>(null);
+  const [categoryConfidence, setCategoryConfidence] = useState<number | null>(null);
   const [zoneType, setZoneType] = useState<string>('residential');
-  const [zoneMultiplier, setZoneMultiplier] = useState<number>(1.0);
 
-  // Phase 2: Computer Vision & Duplicate States
+  // Computer Vision & Duplicate States
   const [cvResult, setCvResult] = useState<{
     is_valid_civic_image: boolean;
     defect_type: string;
@@ -103,6 +125,190 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
   const [success, setSuccess] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // ==================== SPEECH-TO-TEXT (MICROPHONE VOICE REGISTRATION) ====================
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.warn('Speech recognition stop warning:', e);
+      }
+    }
+    setIsListening(false);
+    setActiveSpeechField(null);
+  };
+
+  const startListening = (targetField: 'title' | 'description') => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setError('Speech recognition is not supported in this browser. Please use Chrome, Edge, or mobile browser, or type in Telugu / English.');
+      return;
+    }
+
+    if (isListening) {
+      stopListening();
+      return;
+    }
+
+    setError('');
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = speechLang;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognitionRef.current = recognition;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setActiveSpeechField(targetField);
+      };
+
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          transcript += event.results[i][0].transcript;
+        }
+
+        if (targetField === 'title') {
+          setTitle((prev) => {
+            const trimmed = prev.trim();
+            return trimmed ? `${trimmed} ${transcript}` : transcript;
+          });
+        } else {
+          setDescription((prev) => {
+            const trimmed = prev.trim();
+            const updated = trimmed ? `${trimmed} ${transcript}` : transcript;
+            if (updated.length >= 8) {
+              runClassification(updated, images[0] || null, location, locationLat, locationLng);
+            }
+            return updated;
+          });
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error:', event.error);
+        if (event.error !== 'no-speech') {
+          setError(`Microphone Notice: ${event.error === 'not-allowed' ? 'Microphone permission denied. Please allow microphone access.' : event.error}`);
+        }
+        stopListening();
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+        setActiveSpeechField(null);
+        if (targetField === 'description' && description.trim().length >= 8) {
+          runClassification(description, images[0] || null, location, locationLat, locationLng);
+        }
+      };
+
+      recognition.start();
+    } catch (err: any) {
+      console.error('Speech recognition exception:', err);
+      setError('Could not initialize microphone. Please check permissions.');
+      setIsListening(false);
+      setActiveSpeechField(null);
+    }
+  };
+
+  // ==================== CAMERA CAPTURE (WEBCAM & MOBILE CAMERA) ====================
+  const openCameraModal = async () => {
+    setError('');
+    setCameraModalOpen(true);
+    setCameraLoading(true);
+
+    try {
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: cameraFacing,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      setCameraLoading(false);
+    } catch (err: any) {
+      console.warn('Live camera stream error, falling back to camera file input:', err);
+      setCameraLoading(false);
+      setCameraModalOpen(false);
+      // Fallback directly to mobile camera capture input
+      cameraInputRef.current?.click();
+    }
+  };
+
+  const closeCameraModal = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCameraModalOpen(false);
+    setCameraLoading(false);
+  };
+
+  const switchCameraFacing = async () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    const nextFacing = cameraFacing === 'environment' ? 'user' : 'environment';
+    setCameraFacing(nextFacing);
+    setCameraLoading(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: nextFacing },
+        audio: false
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch (err) {
+      console.warn('Switch camera error:', err);
+    } finally {
+      setCameraLoading(false);
+    }
+  };
+
+  const captureSnapshot = async () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+    closeCameraModal();
+
+    const updated = [...images, dataUrl].slice(0, 5);
+    setImages(updated);
+
+    // Verify first photo
+    try {
+      setVerifyingImage(true);
+      const cv = await api.verifyImage(updated[0]);
+      setCvResult(cv);
+    } catch (err) {
+      console.warn('CV verification error:', err);
+    } finally {
+      setVerifyingImage(false);
+    }
+
+    runClassification(description, updated[0], location, locationLat, locationLng);
+  };
 
   // Trigger classification when text, image, or location changes
   const runClassification = async (
@@ -128,15 +334,11 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
         setCategory(res.wing);
         setCategoryLabel(res.wing_label || res.wing.replace('_', ' '));
       }
-      if (res.priority) {
-        setPriority(res.priority);
-      }
-      if (res.priority_score) {
-        setPriorityScore(res.priority_score);
+      if (res.confidence || res.wing_confidence) {
+        setCategoryConfidence(res.confidence || res.wing_confidence);
       }
       if (res.location_info) {
         setZoneType(res.location_info.zone_type || 'residential');
-        setZoneMultiplier(res.location_info.vulnerability_multiplier || 1.0);
       }
       runDuplicateCheck(descText, res.wing || category, lat, lng, locAddress, imgData);
     } catch (err) {
@@ -234,10 +436,9 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
     await Promise.all(readPromises);
 
     if (newImages.length > 0) {
-      const updatedList = [...images, ...newImages].slice(0, 5); // Limit up to 5 photos
+      const updatedList = [...images, ...newImages].slice(0, 5);
       setImages(updatedList);
 
-      // Verify the first photo with Computer Vision
       const primaryPhoto = updatedList[0];
       try {
         setVerifyingImage(true);
@@ -258,6 +459,7 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
     }
 
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
 
   const handleRemoveImage = (indexToRemove: number) => {
@@ -291,7 +493,6 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
 
     try {
       let finalCategory = category;
-      let finalPriority = priority;
 
       if (!finalCategory) {
         const res = await api.classifyComplaint(
@@ -302,7 +503,6 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
           locationLng || undefined
         );
         finalCategory = res.wing || 'others';
-        finalPriority = res.priority || 'Medium';
       }
 
       const created = await api.createComplaint({
@@ -315,8 +515,7 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
         location_lat: locationLat || undefined,
         location_lng: locationLng || undefined,
         category: finalCategory,
-        priority: finalPriority,
-        priority_score: priorityScore || undefined,
+        priority: 'Medium',
         image_data: images[0] || undefined,
         images: images.length > 0 ? images : undefined,
         citizen_name: citizenName || undefined,
@@ -324,12 +523,43 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
         citizen_phone: citizenPhone || undefined
       });
 
-      const shortId = created?.id ? (created.id.length > 8 ? `NXC-${created.id.slice(0, 6).toUpperCase()}` : created.id) : 'NXC-LIVE';
+      const shortId = created?.grievance_ref_number || (created?.id ? `AP-${selectedCorp}-2026-NXC${created.id.slice(0, 4).toUpperCase()}` : 'AP-NXC-LIVE');
+      const wfType = created?.workflow_type || 'ordinary_grievance';
+      const expectedTimeline = created?.deadline_formatted || created?.expected_resolution_date || 'Within 7 AP Working Days';
+
       setReceiptDetails({
         id: shortId,
+        rawId: created?.id,
+        refNumber: shortId,
+        department: created?.department || 'Municipal Services',
+        category: created?.category || finalCategory,
+        workflowType: wfType,
+        expectedDate: expectedTimeline,
         sla: created?.municipal_sla || '24 - 48 Hours (Standard Municipal SLA)',
         emailSent: Boolean(citizenEmail && citizenEmail.includes('@')),
-        smsSent: Boolean(citizenPhone && citizenPhone.trim().length >= 10)
+        smsSent: Boolean(citizenPhone && citizenPhone.trim().length >= 10),
+        receiptData: {
+          grievance_ref_number: shortId,
+          complaint_id: created?.id || 'live-id',
+          title: created?.title || title,
+          citizen_name: citizenName || 'Public Citizen',
+          citizen_email: citizenEmail,
+          citizen_phone: citizenPhone,
+          submission_time: created?.created_at || new Date().toISOString(),
+          department: created?.department || 'Municipal Services',
+          department_code: created?.department_code || finalCategory,
+          category: created?.category || finalCategory,
+          workflow_type: wfType,
+          legal_source: created?.legal_source || (wfType === 'notified_service' ? 'AP Public Services Delivery Guarantee Act, 2017 (Act No. 6 of 2018)' : 'AP Municipal Citizen Charter & PGRS Guidelines'),
+          go_reference: 'Standing Order No. 118',
+          designated_officer: created?.designated_officer || 'Municipal Section Engineer',
+          expected_resolution_date: expectedTimeline,
+          timeline_calculation_method: 'working_days',
+          current_status: 'pending',
+          first_appellate_authority: created?.appellate_authority || 'Superintending Engineer / Commissioner',
+          appeal_deadline_days: wfType === 'notified_service' ? 30 : 15,
+          compensation_applicable: wfType === 'notified_service'
+        }
       });
 
       // Clear input fields
@@ -341,17 +571,17 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
       setLocationLng(null);
       setCategory('');
       setCategoryLabel('');
-      setPriority('Medium');
-      setPriorityScore(null);
+      setCategoryConfidence(null);
       setImages([]);
       setCvResult(null);
       setDuplicateResult(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
       
       if (created.is_duplicate) {
         setSuccess('Duplicate Complaint Identified & Merged! Your report added an active Citizen Endorsement (+1 Upvote) to fast-track this municipal repair.');
       } else {
-        setSuccess('Civic Complaint Registered and assigned to Department Command Center!');
+        setSuccess('Civic Complaint Registered and classified to Department Command Center!');
       }
 
       onComplaintAdded();
@@ -363,43 +593,74 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
     }
   };
 
-  const getPriorityBadgeClass = (p: string) => {
-    switch (p.toLowerCase()) {
-      case 'critical':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border-red-300 dark:border-red-700';
-      case 'high':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 border-orange-300 dark:border-orange-700';
-      case 'medium':
-        return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300 dark:border-amber-700';
-      default:
-        return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700';
-    }
-  };
-
-  const getPriorityIcon = (p: string) => {
-    switch (p.toLowerCase()) {
-      case 'critical': return <Flame size={14} className="text-red-600 dark:text-red-400" />;
-      case 'high': return <AlertTriangle size={14} className="text-orange-600 dark:text-orange-400" />;
-      case 'medium': return <Clock size={14} className="text-amber-600 dark:text-amber-400" />;
-      default: return <CheckCircle size={14} className="text-emerald-600 dark:text-emerald-400" />;
-    }
-  };
-
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-slate-200/80 dark:border-gray-700 p-6">
-      <div className="flex items-center justify-between mb-4">
+      
+      {/* Header with Bilingual & Voice Helper */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-gray-700">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">File Civic Grievance & Work Order</h2>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+              ఫిర్యాదు నమోదు &bull; File Civic Grievance
+            </h2>
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 flex items-center gap-1">
-              <Sparkles size={11} /> AI Multimodal Triage
+              <Sparkles size={11} /> AI Auto-Classifier
             </span>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Attach multiple photos, select your AP Municipal Corporation & Ward. Multimodal AI computes priority and routes to the assigned municipal department.
+            మీరు <strong>తెలుగులో (Telugu)</strong> లేదా <strong>ఇంగ్లీషులో (English)</strong> మాట్లాడి లేదా టైప్ చేసి నమోదు చేయవచ్చు. కెమెరాతో ఫోటో తీయండి.
           </p>
         </div>
+
+        {/* Voice Language Selector Pill */}
+        <div className="flex items-center gap-1.5 self-start sm:self-auto bg-slate-100 dark:bg-gray-700/80 p-1 rounded-xl text-xs font-semibold">
+          <Languages size={13} className="text-teal-600 ml-1" />
+          <button
+            type="button"
+            onClick={() => setSpeechLang('te-IN')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+              speechLang === 'te-IN'
+                ? 'bg-teal-600 text-white shadow-2xs'
+                : 'text-slate-600 dark:text-gray-300 hover:text-slate-900'
+            }`}
+          >
+            తెలుగు
+          </button>
+          <button
+            type="button"
+            onClick={() => setSpeechLang('en-IN')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+              speechLang === 'en-IN'
+                ? 'bg-teal-600 text-white shadow-2xs'
+                : 'text-slate-600 dark:text-gray-300 hover:text-slate-900'
+            }`}
+          >
+            English
+          </button>
+        </div>
       </div>
+
+      {/* Voice Recording Active Pulsing Banner */}
+      {isListening && (
+        <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-700 rounded-xl flex items-center justify-between gap-3 text-rose-900 dark:text-rose-200 animate-pulse shadow-xs">
+          <div className="flex items-center gap-2 text-xs font-bold">
+            <span className="w-3 h-3 rounded-full bg-rose-600 animate-ping inline-block" />
+            <span>
+              {speechLang === 'te-IN'
+                ? '🎙️ వింటున్నారు... తెలుగులో మాట్లాడండి...'
+                : '🎙️ Listening... Speak now in English...'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={stopListening}
+            className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
+          >
+            <Square size={11} />
+            <span>పూర్తయింది (Stop)</span>
+          </button>
+        </div>
+      )}
       
       {error && <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 rounded-xl text-xs">{error}</div>}
       
@@ -410,32 +671,65 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
         </div>
       )}
 
-      {/* Official Municipal Acknowledgment Receipt */}
+      {/* Official Municipal Acknowledgment Receipt Banner */}
       {receiptDetails && (
-        <div className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-teal-50 via-emerald-50 to-slate-50 dark:from-teal-950/40 dark:via-emerald-950/40 dark:to-gray-900/60 border border-teal-300 dark:border-teal-700/80 text-slate-800 dark:text-slate-100 shadow-xs space-y-2.5">
+        <div className="mb-4 p-5 rounded-2xl bg-gradient-to-r from-teal-50 via-emerald-50 to-slate-50 dark:from-teal-950/40 dark:via-emerald-950/40 dark:to-gray-900/60 border border-teal-300 dark:border-teal-700/80 text-slate-800 dark:text-slate-100 shadow-sm space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-teal-600 text-white flex items-center justify-center font-bold text-xs">✓</span>
-              <span className="font-bold text-sm text-slate-900 dark:text-white">Municipal Grievance Ticket Dispatched</span>
+            <div className="flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center font-black text-xs shadow-xs">✓</span>
+              <div>
+                <span className="font-extrabold text-sm text-slate-900 dark:text-white block">
+                  Municipal Grievance Successfully Registered
+                </span>
+                <span className="text-[11px] text-teal-700 dark:text-teal-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                  <Scale size={12} />
+                  {receiptDetails.workflowType === 'notified_service' ? 'Notified Public Service (Act No. 6 of 2018)' : 'Ordinary Civic Grievance (Citizen Charter)'}
+                </span>
+              </div>
             </div>
-            <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-teal-200/80 dark:bg-teal-900/80 text-teal-900 dark:text-teal-200 tracking-wider">
-              REF: {receiptDetails.id}
-            </span>
+            
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 rounded-xl text-xs font-mono font-black bg-teal-200/80 dark:bg-teal-900/80 text-teal-950 dark:text-teal-200 tracking-wider">
+                REF: {receiptDetails.refNumber}
+              </span>
+              <button
+                type="button"
+                onClick={() => setReceiptModalOpen(true)}
+                className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download size={13} />
+                Download Receipt
+              </button>
+            </div>
           </div>
 
-          <div className="text-xs text-slate-600 dark:text-slate-300 flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-2 border-t border-teal-200/60 dark:border-teal-800/60">
-            <span>Target SLA: <strong className="text-amber-700 dark:text-amber-300">{receiptDetails.sla}</strong></span>
-            {receiptDetails.emailSent && (
-              <span className="flex items-center gap-1 text-teal-700 dark:text-teal-300 font-semibold">
-                <Mail size={13} /> Confirmation Dispatched
+          <div className="text-xs text-slate-600 dark:text-slate-300 grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2.5 border-t border-teal-200/60 dark:border-teal-800/60">
+            <div>
+              <span className="text-slate-400 block text-[10px] font-bold">DEPARTMENT</span>
+              <strong>{receiptDetails.department}</strong>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] font-bold">EXPECTED RESOLUTION DATE</span>
+              <strong className="text-teal-800 dark:text-teal-300">{receiptDetails.expectedDate}</strong>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] font-bold">NOTIFICATION DISPATCH</span>
+              <span className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                <CheckCheck size={13} /> SMS & Email Dispatched
               </span>
-            )}
-            {receiptDetails.smsSent && (
-              <span className="flex items-center gap-1 text-teal-700 dark:text-teal-300 font-semibold">
-                <Phone size={13} /> SMS Alert Dispatched
-              </span>
-            )}
+            </div>
           </div>
+
+          {receiptDetails.rawId && (
+            <div className="pt-2 border-t border-teal-200/40 dark:border-teal-800/40 flex justify-end">
+              <Link
+                to={`/complaint/${receiptDetails.rawId}`}
+                className="text-xs text-teal-700 dark:text-teal-300 hover:underline font-bold inline-flex items-center gap-1"
+              >
+                <span>View Full Tracking Dossier &rarr;</span>
+              </Link>
+            </div>
+          )}
         </div>
       )}
 
@@ -456,7 +750,7 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
                 </span>
               </div>
               <p className="text-xs text-amber-800/90 dark:text-amber-300/90 mt-0.5">
-                Existing ticket: <strong>"{duplicateResult.master_title}"</strong>. Submitting will register your report as a <strong>Citizen Endorsement (+1 Upvote)</strong> to escalate repair priority.
+                Existing ticket: <strong>"{duplicateResult.master_title}"</strong>. Submitting will register your report as a <strong>Citizen Endorsement (+1 Upvote)</strong> to fast-track municipal action.
               </p>
             </div>
           </div>
@@ -501,44 +795,105 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
           </div>
         </div>
 
-        {/* Complaint Title */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 dark:text-gray-300 mb-1">Complaint Title</label>
-          <input
-            type="text"
-            required
-            className="w-full px-3.5 py-2 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none text-slate-900 dark:text-white text-sm"
-            placeholder="e.g. Road crater & asphalt cave-in near Benz Circle Service Road"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </div>
-        
-        {/* Detailed Description */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 dark:text-gray-300 mb-1">
-            Detailed Description & Hazard Severity
-          </label>
-          <textarea
-            required
-            rows={3}
-            className="w-full px-3.5 py-2 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none text-slate-900 dark:text-white text-xs resize-none"
-            placeholder="Describe the issue in detail: depth of pothole, sewage leakage volume, sparking electric pole, water pressure loss..."
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={handleDescriptionBlur}
-          />
-        </div>
-
-        {/* Multi-Photo Upload Section */}
+        {/* Complaint Title with Voice Input */}
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-bold text-slate-700 dark:text-gray-300">
-              Photo Evidence (Upload Multiple Photos — Evaluated by Computer Vision AI)
+              ఫిర్యాదు శీర్షిక &bull; Complaint Title
+            </label>
+            <button
+              type="button"
+              onClick={() => startListening('title')}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                isListening && activeSpeechField === 'title'
+                  ? 'bg-rose-600 text-white animate-pulse'
+                  : 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 hover:bg-teal-100 border border-teal-200 dark:border-teal-800'
+              }`}
+              title="Click to speak title in Telugu or English"
+            >
+              {isListening && activeSpeechField === 'title' ? <MicOff size={12} /> : <Mic size={12} />}
+              <span>{isListening && activeSpeechField === 'title' ? 'ఆపండి (Stop)' : 'మాట్లాడండి (Speak)'}</span>
+            </button>
+          </div>
+          <div className="relative">
+            <input
+              type="text"
+              required
+              className="w-full pl-3.5 pr-10 py-2.5 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none text-slate-900 dark:text-white text-sm"
+              placeholder="ఉదా: రోడ్డుపై పెద్ద గుంతలు / e.g. Deep road crater near Benz Circle"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => startListening('title')}
+              className={`absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition ${
+                isListening && activeSpeechField === 'title'
+                  ? 'text-rose-600 bg-rose-100 dark:bg-rose-900/50'
+                  : 'text-slate-400 hover:text-teal-600'
+              }`}
+              title="Speak in Telugu/English"
+            >
+              <Mic size={15} />
+            </button>
+          </div>
+        </div>
+        
+        {/* Detailed Description with Voice Input */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-bold text-slate-700 dark:text-gray-300">
+              సమస్య పూర్తి వివరాలు &bull; Detailed Description
+            </label>
+            <button
+              type="button"
+              onClick={() => startListening('description')}
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                isListening && activeSpeechField === 'description'
+                  ? 'bg-rose-600 text-white animate-pulse'
+                  : 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 hover:bg-teal-100 border border-teal-200 dark:border-teal-800'
+              }`}
+              title="Click to speak description in Telugu or English"
+            >
+              {isListening && activeSpeechField === 'description' ? <MicOff size={12} /> : <Mic size={12} />}
+              <span>{isListening && activeSpeechField === 'description' ? 'ఆపండి (Stop)' : 'వాయిస్ మైక్ (Voice Mic)'}</span>
+            </button>
+          </div>
+          <div className="relative">
+            <textarea
+              required
+              rows={3}
+              className="w-full pl-3.5 pr-10 py-2.5 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none text-slate-900 dark:text-white text-xs resize-none"
+              placeholder="సమస్యను వివరంగా చెప్పండి: తాగునీటి పైపులైన్ లీకేజీ, కాలువ పూడిక, వీధి లైట్లు వెలగడం లేదు, చెత్త పేరుకుపోయింది... / Describe the civic defect in detail in Telugu or English..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onBlur={handleDescriptionBlur}
+            />
+            <button
+              type="button"
+              onClick={() => startListening('description')}
+              className={`absolute right-2.5 top-3 p-1.5 rounded-lg transition ${
+                isListening && activeSpeechField === 'description'
+                  ? 'text-rose-600 bg-rose-100 dark:bg-rose-900/50'
+                  : 'text-slate-400 hover:text-teal-600'
+              }`}
+              title="Speak in Telugu/English"
+            >
+              <Mic size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Multi-Photo & Camera Section */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-bold text-slate-700 dark:text-gray-300">
+              ఫోటో రుజువు &bull; Photo Evidence (Upload or Capture with Camera)
             </label>
             <span className="text-[11px] text-slate-500">{images.length}/5 photos attached</span>
           </div>
           
+          {/* Hidden File Inputs */}
           <input
             type="file"
             ref={fileInputRef}
@@ -547,8 +902,16 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
             onChange={handleImageChange}
             className="hidden"
           />
+          <input
+            type="file"
+            ref={cameraInputRef}
+            accept="image/*"
+            capture="environment"
+            onChange={handleImageChange}
+            className="hidden"
+          />
 
-          {/* Photo Gallery Thumbnails */}
+          {/* Photo Gallery & Action Buttons */}
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5 pt-1">
             {images.map((img, idx) => (
               <div key={idx} className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-gray-700 bg-slate-100 aspect-square shadow-2xs">
@@ -570,24 +933,37 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
             ))}
 
             {images.length < 5 && (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="aspect-square border-2 border-dashed border-slate-300 dark:border-gray-600 hover:border-teal-500 rounded-xl flex flex-col items-center justify-center gap-1 text-slate-600 dark:text-gray-400 hover:text-teal-600 transition bg-slate-50 dark:bg-gray-900/50 p-2 text-center"
-              >
-                <Plus size={18} className="text-teal-600" />
-                <span className="text-[10px] font-bold">Add Photo</span>
-              </button>
+              <>
+                {/* 1. Take Photo with Live Camera Button */}
+                <button
+                  type="button"
+                  onClick={openCameraModal}
+                  className="aspect-square border-2 border-dashed border-teal-300 dark:border-teal-700/80 hover:border-teal-500 rounded-xl flex flex-col items-center justify-center gap-1 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950/30 transition p-2 text-center cursor-pointer bg-teal-50/40"
+                >
+                  <Camera size={18} className="text-teal-600" />
+                  <span className="text-[10px] font-bold">కెమెరా (Camera)</span>
+                </button>
+
+                {/* 2. Choose File from Gallery Button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="aspect-square border-2 border-dashed border-slate-300 dark:border-gray-600 hover:border-teal-500 rounded-xl flex flex-col items-center justify-center gap-1 text-slate-600 dark:text-gray-400 hover:text-teal-600 transition bg-slate-50 dark:bg-gray-900/50 p-2 text-center cursor-pointer"
+                >
+                  <Plus size={18} className="text-teal-600" />
+                  <span className="text-[10px] font-bold">గ్యాలరీ (Upload)</span>
+                </button>
+              </>
             )}
           </div>
 
-          {/* CV Feedback on Primary Photo */}
+          {/* Computer Vision Feedback */}
           {images.length > 0 && (
             <div className="mt-2.5 p-2.5 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl flex items-center justify-between text-xs">
               {verifyingImage ? (
                 <div className="flex items-center gap-1.5 text-teal-600 font-medium">
                   <Loader2 size={13} className="animate-spin" />
-                  <span>AI Computer Vision inspecting pavement defect & damage depth...</span>
+                  <span>AI Computer Vision inspecting pavement defect...</span>
                 </div>
               ) : cvResult?.is_valid_civic_image ? (
                 <div className="flex items-center gap-3 flex-wrap">
@@ -598,13 +974,10 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
                   <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
                     {Math.round(cvResult.visual_confidence * 100)}% AI Verified
                   </span>
-                  <span className="text-slate-600 text-[11px]">
-                    Severity: <strong>{cvResult.visual_severity_score}/100 ({cvResult.visual_priority_tier})</strong>
-                  </span>
                 </div>
               ) : (
                 <span className="text-slate-500 text-[11px]">
-                  {cvResult?.rejection_reason || `${images.length} photos attached for inspection.`}
+                  {cvResult?.rejection_reason || `${images.length} photos attached for field verification.`}
                 </span>
               )}
             </div>
@@ -615,12 +988,12 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-gray-300 mb-1">
-              Specific Landmark / Street Name
+              గుర్తు / వీధి పేరు &bull; Landmark / Street Name
             </label>
             <input
               type="text"
               className="w-full px-3 py-2 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none text-slate-900 dark:text-white text-xs"
-              placeholder="e.g. Near Govt Hospital Pillar 14, Main Road"
+              placeholder="ఉదా: ప్రభుత్వ ఆస్పత్రి ఎదురుగా / Near Govt Hospital"
               value={landmark}
               onChange={(e) => setLandmark(e.target.value)}
             />
@@ -628,7 +1001,7 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
 
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-gray-300 mb-1">
-              GPS Coordinates / Street Address
+              GPS స్థానం &bull; Coordinates / Address
             </label>
             <div className="flex gap-2">
               <div className="flex-1 relative">
@@ -647,7 +1020,7 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
                 type="button"
                 onClick={handleDetectGps}
                 disabled={detectingGps}
-                className="px-3 py-2 bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 hover:bg-teal-100 rounded-xl text-xs font-bold flex items-center gap-1 transition border border-teal-200 dark:border-teal-800 shrink-0"
+                className="px-3 py-2 bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 hover:bg-teal-100 rounded-xl text-xs font-bold flex items-center gap-1 transition border border-teal-200 dark:border-teal-800 shrink-0 cursor-pointer"
               >
                 <Navigation size={13} className={detectingGps ? 'animate-spin' : ''} />
                 <span>{detectingGps ? 'GPS...' : 'GPS'}</span>
@@ -656,47 +1029,36 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
           </div>
         </div>
 
-        {/* Vulnerability Zone Type */}
+        {/* Locality Type & AI Classification (Priority score completely removed) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-gray-300 mb-1">
-              Zone Vulnerability Tier (Impact Multiplier: {zoneMultiplier}x)
+              ప్రాంతం రకం &bull; Locality / Zone Category
             </label>
             <select
               value={zoneType}
-              onChange={(e) => {
-                setZoneType(e.target.value);
-                const map: Record<string, number> = {
-                  hospital: 1.5,
-                  school: 1.4,
-                  highway: 1.3,
-                  transit_hub: 1.25,
-                  commercial: 1.1,
-                  residential: 1.0
-                };
-                setZoneMultiplier(map[e.target.value] || 1.0);
-              }}
+              onChange={(e) => setZoneType(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none"
             >
-              <option value="residential">Residential Zone (1.0x)</option>
-              <option value="hospital">Hospital / Emergency Health Zone (1.5x Priority Boost)</option>
-              <option value="school">School / College Pedestrian Zone (1.4x Priority Boost)</option>
-              <option value="highway">High-Speed Corridor / Highway (1.3x Priority Boost)</option>
-              <option value="transit_hub">RTC Bus Station / Railway Station (1.25x Priority Boost)</option>
-              <option value="commercial">Commercial Market (1.1x Priority Boost)</option>
+              <option value="residential">Residential Colony (నివాస ప్రాంతం)</option>
+              <option value="hospital">Hospital &amp; Healthcare Zone (ఆస్పత్రి ప్రాంతం)</option>
+              <option value="school">School / College Zone (పాఠశాల / కళాశాల)</option>
+              <option value="highway">High-Speed Corridor / Highway (హైవే / ప్రధాన రహదారి)</option>
+              <option value="transit_hub">RTC Bus Station / Railway Station (బస్టాండ్ / రైల్వే స్టేషన్)</option>
+              <option value="commercial">Commercial Market (వాణిజ్య మార్కెట్)</option>
             </select>
           </div>
 
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-gray-300 mb-1 flex items-center justify-between">
-              <span>Target Municipal Wing</span>
+              <span>వర్గీకరణ శాఖ &bull; Target Municipal Department</span>
               {classifying && (
                 <span className="text-[10px] text-teal-600 font-medium flex items-center gap-1">
-                  <Loader2 size={10} className="animate-spin" /> AI routing...
+                  <Loader2 size={10} className="animate-spin" /> AI Classifying...
                 </span>
               )}
             </label>
-            <div className="px-3 py-2 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl text-xs flex items-center justify-between text-slate-800 dark:text-slate-200 font-semibold">
+            <div className="px-3 py-2 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl text-xs flex items-center justify-between text-slate-800 dark:text-slate-200 font-semibold min-h-[38px]">
               <span className="flex items-center gap-1.5">
                 {categoryLabel || (category ? category.replace('_', ' ').toUpperCase() : 'AI Auto-Detect')}
                 {checkingDuplicate && (
@@ -705,10 +1067,9 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
                   </span>
                 )}
               </span>
-              {priority && (
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 ${getPriorityBadgeClass(priority)}`}>
-                  {getPriorityIcon(priority)}
-                  {priority}
+              {categoryConfidence && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                  {Math.round(categoryConfidence * 100)}% Match
                 </span>
               )}
             </div>
@@ -770,16 +1131,95 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
           {submitting ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              <span>Registering Complaint...</span>
+              <span>నమోదు చేస్తున్నారు... Registering Complaint...</span>
             </>
           ) : (
             <>
               <Send size={16} />
-              <span>Submit Civic Grievance to {selectedCorp}</span>
+              <span>ఫిర్యాదు సమర్పించండి &bull; Submit to {selectedCorp}</span>
             </>
           )}
         </button>
       </form>
+
+      {/* Official Downloadable Acknowledgement Receipt Modal */}
+      {receiptDetails && (
+        <AcknowledgementReceiptModal
+          receipt={receiptDetails.receiptData}
+          isOpen={receiptModalOpen}
+          onClose={() => setReceiptModalOpen(false)}
+        />
+      )}
+
+      {/* INTERACTIVE LIVE CAMERA CAPTURE MODAL */}
+      {cameraModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 text-white rounded-3xl overflow-hidden max-w-lg w-full border border-slate-700 shadow-2xl space-y-4 p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-bold text-sm">
+                <Video size={16} className="text-teal-400" />
+                <span>Take Photo with Camera &bull; ఫోటో తీయండి</span>
+              </div>
+              <button
+                type="button"
+                onClick={closeCameraModal}
+                className="p-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Video Viewport */}
+            <div className="relative aspect-video bg-black rounded-2xl overflow-hidden flex items-center justify-center border border-slate-800">
+              {cameraLoading && (
+                <div className="flex items-center gap-2 text-teal-400 text-xs">
+                  <Loader2 size={20} className="animate-spin" />
+                  <span>కెమెరా ప్రారంభమవుతోంది... Initializing camera...</span>
+                </div>
+              )}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Camera Controls */}
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <button
+                type="button"
+                onClick={switchCameraFacing}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold flex items-center gap-1.5 transition text-slate-200"
+                title="Switch front/back camera"
+              >
+                <RefreshCw size={14} />
+                <span>Flip Camera</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={captureSnapshot}
+                className="px-6 py-2.5 rounded-full bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-sm flex items-center gap-2 shadow-lg transition active:scale-95 cursor-pointer"
+              >
+                <Camera size={18} />
+                <span>ఫోటో తీయండి (Capture)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  closeCameraModal();
+                  cameraInputRef.current?.click();
+                }}
+                className="text-xs text-slate-400 hover:text-white underline"
+              >
+                Native App
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

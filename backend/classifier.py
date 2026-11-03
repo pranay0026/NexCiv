@@ -239,6 +239,8 @@ class ComplaintClassifier:
 
         wing = 'others'
         wing_confidence = 0.5
+        complaint_type = 'other_civic_issue'
+        complaint_type_conf = 0.5
         priority = 'Medium'
         priority_confidence = 0.5
         all_probabilities = {code: 0.2 for code in DEPARTMENTS.keys()}
@@ -264,12 +266,26 @@ class ComplaintClassifier:
                             for cls, prob in zip(classes, w_probs)
                         }
 
-                        priority = prio_pipe.predict([clean_text])[0]
-                        p_probs = prio_pipe.predict_proba([clean_text])[0]
-                        priority_confidence = float(np.max(p_probs))
+                        # Predict Complaint Type if multi-task pipeline present
+                        type_pipe = self._bundle.get('complaint_type_pipeline')
+                        if type_pipe:
+                            try:
+                                complaint_type = type_pipe.predict([clean_text])[0]
+                                t_probs = type_pipe.predict_proba([clean_text])[0]
+                                complaint_type_conf = float(np.max(t_probs))
+                            except Exception:
+                                pass
+
+                        if prio_pipe is not None:
+                            try:
+                                priority = prio_pipe.predict([clean_text])[0]
+                                p_probs = prio_pipe.predict_proba([clean_text])[0]
+                                priority_confidence = float(np.max(p_probs))
+                            except Exception:
+                                pass
 
                         prio_base_weights = {'Critical': 90.0, 'High': 75.0, 'Medium': 50.0, 'Low': 25.0}
-                        text_score = prio_base_weights[priority] * priority_confidence + (1.0 - priority_confidence) * 50.0
+                        text_score = prio_base_weights.get(priority, 50.0) * priority_confidence + (1.0 - priority_confidence) * 50.0
 
                         # Extract salient feature words from TF-IDF vectorizer
                         try:
@@ -348,6 +364,8 @@ class ComplaintClassifier:
             'department': dept_info['name'],
             'department_code': dept_info['code'],
             'department_head': dept_info['head'],
+            'complaint_type': complaint_type,
+            'complaint_type_confidence': complaint_type_conf,
             'all_probabilities': all_probabilities,
             'top_keywords': top_keywords,
             'image_analysis': image_meta,

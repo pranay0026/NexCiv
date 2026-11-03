@@ -1,5 +1,16 @@
 [
   {
+    "id": "b8576740-1211-4e3b-9086-b7a4cdd2e37b",
+    "name": "Joanna Celina Mathew",
+    "email": "joanna@gmail.com",
+    "phone": "",
+    "password_hash": "7bd6f36ab609201635f13449c41c9ae4bfb28388c4d53619c1a88c9aa96b7612",
+    "municipality_code": "ELR",
+    "ward": "",
+    "address": "",
+    "created_at": "2026-11-02T14:58:06.013405Z"
+  },
+  {
     "id": "2a58caf5-bbc8-4a8b-95ba-e8c58331e215",
     "name": "Ravi Teja",
     "email": "test.citizen.eluru@gmail.com",
