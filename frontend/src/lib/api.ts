@@ -2021,5 +2021,17 @@ export const api = {
       appeal_deadline_days: c.workflow_type === 'notified_service' ? 30 : 15,
       compensation_applicable: c.workflow_type === 'notified_service'
     };
+  },
+
+  async recommendDispatch(complaint: any): Promise<any> {
+    const res = await fetch(`${API_URL}/api/ai/recommend-dispatch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ complaint })
+    });
+    if (!res.ok) {
+      throw new Error(`Dispatch recommendation failed: ${res.statusText}`);
+    }
+    return await res.json();
   }
 };

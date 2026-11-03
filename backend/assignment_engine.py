@@ -18,7 +18,7 @@ from backend.database import get_supabase  # placeholder – actual import may d
 def fetch_eligible_employees(municipality_code: str, department: str) -> List[Dict[str, Any]]:
     supabase = get_supabase()
     res = supabase.table("employees").select("*").eq("municipality_code", municipality_code).eq("department", department).eq("is_active", True).execute()
-    if res.error:
+    if getattr(res, "error", None):
         return []
     return res.data
 

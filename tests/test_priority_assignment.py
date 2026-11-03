@@ -1,5 +1,14 @@
+import sys
+from pathlib import Path
 import pytest
 from datetime import datetime
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+if str(BASE_DIR / "backend") not in sys.path:
+    sys.path.append(str(BASE_DIR / "backend"))
+
 from backend.priority_engine import evaluate_priority
 from backend.assignment_engine import select_employee_for_complaint
 
@@ -46,6 +55,7 @@ def test_assignment_hard_constraints(monkeypatch):
                 raise ValueError("Unknown table")
         return MockSupabase()
     monkeypatch.setattr('backend.database.get_supabase', mock_get_supabase)
+    monkeypatch.setattr('backend.assignment_engine.get_supabase', mock_get_supabase)
     comp = {
         "municipal_corporation": "VMC",
         "department_code": "road",

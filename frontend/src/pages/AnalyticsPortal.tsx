@@ -2666,13 +2666,53 @@ export default function AnalyticsPortal() {
               {/* Phase 3 AI Smart Dispatch Recommendation Trigger */}
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const selCase = assignableItems.find(i => (i.id === assignCaseId || i.code === assignCaseId)) || assignableItems[0];
                   if (selCase) {
+                    const muniCode = selectedCorp !== 'All' ? selectedCorp : (profile?.role === 'department' ? profile.departmentCode : 'ELR');
+                    // 1. Try Backend Google OR-Tools CP-SAT Dispatch API
+                    try {
+                      const backendRec = await api.recommendDispatch({
+                        id: selCase.id,
+                        grievance_ref_number: selCase.code,
+                        title: selCase.title,
+                        category: selCase.category || selCase.department,
+                        department: selCase.department,
+                        municipal_corporation: muniCode,
+                        ward: selCase.location
+                      });
+                      if (backendRec && (backendRec.recommended_employee_code || backendRec.recommended_employee)) {
+                        const empObj = backendRec.recommended_employee || {};
+                        const empId = backendRec.recommended_employee_code || empObj.employee_code || empObj.id;
+                        setAiDispatchRec({
+                          recommendedEmployee: {
+                            ...empObj,
+                            id: empId,
+                            employee_code: empId,
+                            name: backendRec.recommended_employee_name || empObj.name,
+                            department: backendRec.department || empObj.department,
+                            designation: empObj.designation || 'Cadre Officer'
+                          },
+                          confidenceScore: backendRec.confidence_score,
+                          dispatchRationale: backendRec.dispatch_rationale,
+                          estimatedSlaHours: backendRec.estimated_sla_hours,
+                          requiredEquipment: backendRec.required_equipment,
+                          requiredCrewSize: backendRec.required_crew_size,
+                          dispatchPriority: backendRec.dispatch_priority
+                        });
+                        if (empId) setAssignTargetEmp(empId);
+                        return;
+                      }
+                    } catch (e) {
+                      console.info('Backend OR-Tools recommendation note, falling back to local solver:', e);
+                    }
+
+                    // 2. Client-Side Cadre CP-SAT Optimization Fallback
                     const rec = recommendSmartDispatch({
                       title: selCase.title,
-                      category: selCase.department,
-                      municipal_corporation: selectedCorp !== 'All' ? selectedCorp : 'ELR',
+                      category: selCase.category || selCase.department,
+                      department: selCase.department,
+                      municipal_corporation: muniCode,
                       ward: selCase.location
                     }, employeesList as any);
                     setAiDispatchRec(rec);

@@ -53,93 +53,29 @@ class AiPhase3Engine:
     @staticmethod
     def recommend_dispatch(complaint: Dict[str, Any], candidate_employees: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        AI automated work order dispatch:
+        AI automated work order dispatch powered by Google OR-Tools (CP-SAT):
         Matches grievance defect type, category, location ward, and priority score
-        against the available municipal cadre in that municipality.
+        against the available municipal cadre in that municipality with strict department integrity.
         """
-        category = (complaint.get("category") or complaint.get("department") or "road").lower()
-        defect = (complaint.get("defect_type") or "").lower()
+        from ortools_allocator import recommend_cadre_dispatch_single
+
+        result = recommend_cadre_dispatch_single(complaint, candidate_employees)
+
+        emp = result.get("assigned_employee") or {}
+        emp_code = result.get("assigned_employee_id") or emp.get("employee_code") or emp.get("id") or "UNASSIGNED"
+        emp_name = result.get("assigned_employee_name") or emp.get("name") or "Municipal Cadre Officer"
         priority = complaint.get("priority") or "Medium"
-        corp = (complaint.get("municipal_corporation") or "ELR").upper()
-        ward = complaint.get("ward") or ""
-
-        # Map target department
-        target_dept = "road"
-        if any(w in category or w in defect for w in ["drain", "sewer", "manhole", "waterlog"]):
-            target_dept = "drainage"
-        elif any(w in category or w in defect for w in ["water", "pipe", "leak", "potable"]):
-            target_dept = "water_supply"
-        elif any(w in category or w in defect for w in ["light", "elect", "pole", "wire"]):
-            target_dept = "street_lights"
-        elif any(w in category or w in defect for w in ["sanitat", "waste", "garbage", "trash"]):
-            target_dept = "others"
-
-        # Filter officers belonging strictly to target department in that municipality
-        dept_officers = [
-            e for e in candidate_employees
-            if target_dept in (e.get("department") or "").lower()
-        ]
-        candidates = dept_officers if dept_officers else candidate_employees
-
-        if not candidates:
-            # Fallback officer
-            best_candidate = {
-                "employee_code": f"{corp}-EMP-101",
-                "name": f"Superintending Engineer ({corp})",
-                "department": target_dept,
-                "designation": "Municipal Engineer",
-                "pending_count": 1,
-                "rating": 4.9
-            }
-        else:
-            # Score each candidate: lower backlog = higher score, higher rating = boost
-            best_candidate = candidates[0]
-            highest_score = -999999
-            for c in candidates:
-                pending = c.get("pending_count", c.get("pending", 2))
-                rating = float(c.get("rating") or 4.5)
-                score = 100 - (pending * 15) + (rating * 10)
-                if ward and ward.lower() in (c.get("zone") or "").lower():
-                    score += 25
-                if score > highest_score:
-                    highest_score = score
-                    best_candidate = c
-
-        # Find defect spec
-        defect_key = "pothole"
-        for k in EQUIPMENT_SPECS:
-            if k in defect or k in (complaint.get("title") or "").lower():
-                defect_key = k
-                break
-
-        spec = EQUIPMENT_SPECS.get(defect_key, EQUIPMENT_SPECS["pothole"])
-        sla_hours = spec["base_sla_hours"]
-        if priority == "Critical":
-            sla_hours = max(2, int(sla_hours * 0.5))
-        elif priority == "Low":
-            sla_hours = int(sla_hours * 1.5)
-
-        confidence = round(min(98.8, 89.0 + (abs(hash(str(best_candidate.get("employee_code")))) % 95) / 10.0), 1)
         priority_label = "Emergency Immediate" if priority == "Critical" else "High Fast-Track" if priority == "High" else "Standard Schedule"
 
-        officer_code = best_candidate.get("employee_code", f"{corp}-EMP-101")
-        officer_name = best_candidate.get("name", "Municipal Officer")
-
-        rationale = (
-            f"AI Cadre Dispatch selected {officer_name} ({officer_code}) for {corp} municipality: "
-            f"Lowest active backlog ({best_candidate.get('pending_count', 1)} cases), "
-            f"{best_candidate.get('rating', 4.8)}★ redressal score, and specialization in {best_candidate.get('designation', 'Civil Works')}."
-        )
-
         return {
-            "recommended_employee": best_candidate,
-            "recommended_employee_code": officer_code,
-            "recommended_employee_name": officer_name,
-            "confidence_score": confidence,
-            "dispatch_rationale": rationale,
-            "estimated_sla_hours": sla_hours,
-            "required_equipment": spec["equipment"],
-            "required_crew_size": spec["crew_size"],
+            "recommended_employee": emp,
+            "recommended_employee_code": emp_code,
+            "recommended_employee_name": emp_name,
+            "confidence_score": result.get("confidence_score", 90.0),
+            "dispatch_rationale": result.get("rationale", ""),
+            "estimated_sla_hours": result.get("estimated_sla_hours", 12),
+            "required_equipment": result.get("required_equipment", []),
+            "required_crew_size": result.get("required_crew_size", 2),
             "dispatch_priority": priority_label
         }
 

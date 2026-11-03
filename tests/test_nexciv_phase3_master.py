@@ -30,8 +30,10 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(BASE_DIR))
-sys.path.insert(0, str(BASE_DIR / "backend"))
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+if str(BASE_DIR / "backend") not in sys.path:
+    sys.path.append(str(BASE_DIR / "backend"))
 
 from backend.ap_administration import resolve_department_and_wing, CATEGORY_TO_DEPT_MAP
 from backend.sla_service import (
