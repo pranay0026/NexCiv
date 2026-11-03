@@ -1,3 +1,4 @@
+import re
 import math
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
@@ -68,9 +69,54 @@ class DuplicateClusteringEngine:
         reasons = []
 
         # 1. Department / Category Check
-        cat1 = (item1.get('category') or item1.get('department_code') or '').lower()
-        cat2 = (item2.get('category') or item2.get('department_code') or '').lower()
-        category_match = (cat1 == cat2) and (cat1 != '')
+        cat1 = (item1.get('category') or item1.get('department_code') or item1.get('department') or '').lower()
+        cat2 = (item2.get('category') or item2.get('department_code') or item2.get('department') or '').lower()
+
+        text1 = f"{item1.get('title', '')} {item1.get('description', '')}"
+        text2 = f"{item2.get('title', '')} {item2.get('description', '')}"
+
+        is_water1 = bool(re.search(r'(నీళ్లు|నీరు|నీటి|nelu|neelu|neellu|neeru|water|drinking|పైపు|కుళాయి|బోరు|ravatledu|ravadham)', text1, re.I))
+        is_water2 = bool(re.search(r'(నీళ్లు|నీరు|నీటి|nelu|neelu|neellu|neeru|water|drinking|పైపు|కుళాయి|బోరు|ravatledu|ravadham)', text2, re.I))
+        is_drainage1 = bool(re.search(r'(డ్రైనేజీ|drainage|murugu|sewage|overflow|కాలువ|మ్యాన్‌హోల్)', text1, re.I))
+        is_drainage2 = bool(re.search(r'(డ్రైనేజీ|drainage|murugu|sewage|overflow|కాలువ|మ్యాన్‌హోల్)', text2, re.I))
+        is_road1 = bool(re.search(r'(రోడ్డు|గుంత|pothole|road|asphalt|crater|రహదారి)', text1, re.I))
+        is_road2 = bool(re.search(r'(రోడ్డు|గుంత|pothole|road|asphalt|crater|రహదారి)', text2, re.I))
+        is_light1 = bool(re.search(r'(స్ట్రీట్ లైట్|street light|current|deepalu|చీకటి|స్తంభం)', text1, re.I))
+        is_light2 = bool(re.search(r'(స్ట్రీట్ లైట్|street light|current|deepalu|చీకటి|స్తంభం)', text2, re.I))
+        is_san1 = bool(re.search(r'(చెత్త|garbage|trash|waste|chetha|కుప్పలు|దుర్గంధం)', text1, re.I))
+        is_san2 = bool(re.search(r'(చెత్త|garbage|trash|waste|chetha|కుప్పలు|దుర్గంధం)', text2, re.I))
+
+        norm_map = {
+            'water': 'water_supply',
+            'water_supply': 'water_supply',
+            'drainage': 'drainage',
+            'sewerage': 'drainage',
+            'road': 'roads',
+            'roads': 'roads',
+            'street_light': 'electrical',
+            'street_lights': 'electrical',
+            'electrical': 'electrical',
+            'sanitation': 'sanitation',
+            'solid_waste': 'sanitation'
+        }
+        for k, v in norm_map.items():
+            if k in cat1:
+                cat1 = v
+                break
+        for k, v in norm_map.items():
+            if k in cat2:
+                cat2 = v
+                break
+
+        category_match = (
+            (cat1 == cat2 and cat1 != '') or
+            (is_water1 and is_water2) or
+            (is_drainage1 and is_drainage2) or
+            (is_road1 and is_road2) or
+            (is_light1 and is_light2) or
+            (is_san1 and is_san2)
+        )
+
         if not category_match:
             # Different municipal wings are almost never duplicates of each other
             return {
@@ -115,9 +161,21 @@ class DuplicateClusteringEngine:
             # Fall back to address text comparison if GPS missing
             addr1 = (item1.get('location_address') or '').lower()
             addr2 = (item2.get('location_address') or '').lower()
-            if addr1 and addr2 and (addr1 in addr2 or addr2 in addr1):
-                geo_score = 0.75
-                reasons.append("Matching street address")
+            if addr1 and addr2:
+                cleaned1 = re.sub(r'[^\w\s]', ' ', addr1)
+                cleaned2 = re.sub(r'[^\w\s]', ' ', addr2)
+                stop_words = {'andhra', 'pradesh', 'india', 'urban', 'rural', 'corporation', 'municipal', 'elr', 'gvmc', 'vja', 'gmc', 'ward', 'near', 'road', 'street'}
+                t1 = {t for t in cleaned1.split() if len(t) > 2 and t not in stop_words and not t.isdigit()}
+                t2 = {t for t in cleaned2.split() if len(t) > 2 and t not in stop_words and not t.isdigit()}
+                common = t1.intersection(t2)
+                if addr1 in addr2 or addr2 in addr1:
+                    geo_score = 0.95
+                    distance_meters = 10.0
+                    reasons.append("Matching street address / colony")
+                elif common:
+                    geo_score = 0.85
+                    distance_meters = 25.0
+                    reasons.append(f"Matching locality: {', '.join(list(common)[:3])}")
 
         # 3. Visual Perceptual Hash Comparison
         hash1 = item1.get('image_hash')
@@ -136,12 +194,27 @@ class DuplicateClusteringEngine:
             if visual_score >= 0.85:
                 reasons.append(f"High visual similarity ({visual_score*100:.1f}%)")
 
-        # 4. Semantic Text Similarity
+        # 4. Semantic Text Similarity & Multilingual Intent Alignment
         text1 = f"{item1.get('title', '')} {item1.get('description', '')}"
         text2 = f"{item2.get('title', '')} {item2.get('description', '')}"
         text_score = compute_text_jaccard(text1, text2)
         if text_score >= 0.35:
             reasons.append(f"Matching problem description keywords ({text_score*100:.1f}%)")
+
+        try:
+            from classifier import get_classifier
+            clf = get_classifier()
+            intent1 = clf._analyze_multilingual_intent(text1)
+            intent2 = clf._analyze_multilingual_intent(text2)
+            if intent1 and intent2 and intent1['wing'] == intent2['wing']:
+                if intent1['complaint_type'] == intent2['complaint_type']:
+                    text_score = max(text_score, 0.92)
+                    reasons.append(f"Identical defect: {intent1['complaint_type']}")
+                else:
+                    text_score = max(text_score, 0.80)
+                    reasons.append(f"Congruent department: {intent1['wing']}")
+        except Exception:
+            pass
 
         # 5. Multimodal Composite Fusion
         if has_images:

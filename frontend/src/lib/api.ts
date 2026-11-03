@@ -4,6 +4,43 @@ export { getMunicipalityCadre, saveCustomMunicipalityEmployee } from './employee
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+function extractLocalityTokens(address?: string): Set<string> {
+  if (!address) return new Set();
+  const cleaned = address.toLowerCase().replace(/[^\w\s]/g, ' ');
+  const stopWords = new Set(['andhra', 'pradesh', 'india', 'urban', 'rural', 'corporation', 'municipal', 'elr', 'gvmc', 'vja', 'gmc', 'ward', 'near', 'road', 'street', 'colony', 'area']);
+  const tokens = new Set<string>();
+  cleaned.split(/\s+/).forEach(t => {
+    if (t.length > 2 && !stopWords.has(t) && !/^\d+$/.test(t)) {
+      tokens.add(t);
+    }
+  });
+  return tokens;
+}
+
+function calculateLocalitySimilarity(addr1?: string, addr2?: string): number {
+  if (!addr1 || !addr2) return 0;
+  const t1 = extractLocalityTokens(addr1);
+  const t2 = extractLocalityTokens(addr2);
+  if (t1.size === 0 || t2.size === 0) return 0;
+  let matches = 0;
+  t1.forEach(token => {
+    if (t2.has(token)) matches++;
+  });
+  const union = new Set([...t1, ...t2]).size;
+  return union > 0 ? matches / union : 0;
+}
+
+function calculateHaversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 
 export interface APCorporation {
   code: string;
@@ -706,6 +743,27 @@ export const api = {
     const locAddr = data.location_address || `${corpCode} Municipal Area`;
     const locWithCorp = locAddr.includes(`[${corpCode}]`) ? locAddr : `[${corpCode}] ${data.landmark ? data.landmark + ', ' : ''}${locAddr}`.trim();
 
+    // 0. Intelligent Pre-Submission Duplicate Check
+    let isDuplicate = false;
+    let masterComplaintId: string | undefined = undefined;
+    try {
+      const dup = await this.checkDuplicate({
+        title: data.title,
+        description: data.description,
+        category: normDept,
+        location_lat: data.location_lat,
+        location_lng: data.location_lng,
+        location_address: locWithCorp,
+        image_data: data.image_data || data.image_url || (data.images && data.images[0])
+      });
+      if (dup && dup.is_duplicate && dup.master_complaint_id) {
+        isDuplicate = true;
+        masterComplaintId = dup.master_complaint_id;
+      }
+    } catch (dupErr) {
+      console.warn('Duplicate pre-check note:', dupErr);
+    }
+
     const newRecord: ComplaintRecord = {
       id: itemId,
       title: data.title,
@@ -733,6 +791,8 @@ export const api = {
       assigned_employee_id: undefined,
       upvote_count: 1,
       duplicate_count: 0,
+      is_duplicate: isDuplicate,
+      master_complaint_id: masterComplaintId,
       created_at: nowIso,
       updated_at: nowIso
     };
@@ -740,6 +800,17 @@ export const api = {
     // 1. Immediately persist locally (unbreakable persistence guarantee)
     try {
       const stored = JSON.parse(localStorage.getItem('nexciv_all_complaints') || '[]');
+      if (isDuplicate && masterComplaintId) {
+        const mIdx = stored.findIndex((x: any) => x.id === masterComplaintId);
+        if (mIdx !== -1) {
+          stored[mIdx] = {
+            ...stored[mIdx],
+            upvote_count: (stored[mIdx].upvote_count || 1) + 1,
+            duplicate_count: (stored[mIdx].duplicate_count || 0) + 1,
+            updated_at: nowIso
+          };
+        }
+      }
       localStorage.setItem('nexciv_all_complaints', JSON.stringify([newRecord, ...stored]));
       
       const myStored = JSON.parse(localStorage.getItem('nexciv_my_complaints') || '[]');
@@ -757,7 +828,13 @@ export const api = {
       const res = await fetch(`${API_URL}/api/complaints`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ ...data, municipal_corporation: corpCode, location_address: locWithCorp }),
+        body: JSON.stringify({
+          ...data,
+          municipal_corporation: corpCode,
+          location_address: locWithCorp,
+          is_duplicate: isDuplicate,
+          master_complaint_id: masterComplaintId
+        }),
         signal: controller.signal
       });
       clearTimeout(timer);
@@ -801,11 +878,31 @@ export const api = {
           citizen_name: newRecord.citizen_name,
           citizen_email: newRecord.citizen_email,
           citizen_phone: newRecord.citizen_phone,
-          upvote_count: 1
+          upvote_count: 1,
+          is_duplicate: isDuplicate,
+          master_complaint_id: masterComplaintId
         };
         const { data: supData, error } = await supabase.from('complaints').insert(supRow).select();
         if (!error && supData && supData.length > 0) {
           const synced = { ...newRecord, ...supData[0], municipal_corporation: corpCode };
+          if (isDuplicate && masterComplaintId) {
+            try {
+              const { data: curM } = await supabase
+                .from('complaints')
+                .select('id, upvote_count, duplicate_count')
+                .eq('id', masterComplaintId)
+                .single();
+              if (curM) {
+                await supabase.from('complaints').update({
+                  upvote_count: (curM.upvote_count || 1) + 1,
+                  duplicate_count: (curM.duplicate_count || 0) + 1,
+                  updated_at: nowIso
+                }).eq('id', masterComplaintId);
+              }
+            } catch (mErr) {
+              console.warn('Supabase master increment notice:', mErr);
+            }
+          }
           try {
             const stored = JSON.parse(localStorage.getItem('nexciv_all_complaints') || '[]');
             const updated = [synced, ...stored.filter((x: any) => x.id !== itemId)];
@@ -1410,17 +1507,162 @@ export const api = {
     location_address?: string;
     image_data?: string;
   }) {
+    // 1. Try Backend API first (with 2000ms timeout)
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2000);
       const headers = await getAuthHeaders();
       const res = await fetch(`${API_URL}/api/complaints/check-duplicate`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(data)
+        body: JSON.stringify({
+          title: data.title || '',
+          description: data.description,
+          category: data.category,
+          location_lat: data.location_lat,
+          location_lng: data.location_lng,
+          location_address: data.location_address,
+          image_data: data.image_data
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timer);
       if (res.ok) {
-        return await res.json();
+        const json = await res.json();
+        if (json.is_duplicate || json.decision === 'duplicate') {
+          return {
+            is_duplicate: true,
+            master_complaint_id: json.matched_incident_id || json.master_complaint_id,
+            master_title: json.master_title,
+            similarity_score: json.composite_score || json.similarity_score || 0.94,
+            distance_meters: json.distance_meters,
+            reasons: json.reasons || ['High semantic & geospatial duplicate match']
+          };
+        }
       }
     } catch {}
+
+    // 2. Resilient Multilingual Client-Side Duplicate Detection Engine
+    try {
+      let activeCandidates: any[] = [];
+      try {
+        const stored = JSON.parse(localStorage.getItem('nexciv_all_complaints') || '[]');
+        if (Array.isArray(stored)) {
+          activeCandidates = stored.filter((c: any) => c.status !== 'resolved');
+        }
+      } catch {}
+
+      if (activeCandidates.length === 0) {
+        const { data: supData } = await supabase
+          .from('complaints')
+          .select('*')
+          .neq('status', 'resolved')
+          .limit(80);
+        if (supData && supData.length > 0) {
+          activeCandidates = supData;
+        }
+      }
+
+      if (activeCandidates.length === 0) {
+        return { is_duplicate: false };
+      }
+
+      const inputFull = [data.title, data.description].filter(Boolean).join(' ').toLowerCase();
+      const inputAddr = (data.location_address || '').toLowerCase();
+      const inputCat = data.category ? normalizeDeptCode(data.category) : '';
+
+      const isWater = /(నీళ్లు|నీరు|నీటి|nelu|neelu|neellu|neeru|water|drinking|పైపు|కుళాయి|బోరు|ravatledu|ravadham)/i.test(inputFull);
+      const isDrainage = /(డ్రైనేజీ|drainage|murugu|sewage|overflow|కాలువ|మ్యాన్‌హోల్)/i.test(inputFull);
+      const isRoad = /(రోడ్డు|గుంత|pothole|road|asphalt|crater|రహదారి)/i.test(inputFull);
+      const isLight = /(స్ట్రీట్ లైట్|street light|current|deepalu|చీకటి|స్తంభం)/i.test(inputFull);
+      const isSanitation = /(చెత్త|garbage|trash|waste|chetha|కుప్పలు|దుర్గంధం)/i.test(inputFull);
+
+      let bestMatch: any = null;
+      let highestScore = 0;
+
+      for (const cand of activeCandidates) {
+        const candFull = [cand.title, cand.description].filter(Boolean).join(' ').toLowerCase();
+        const candAddr = (cand.location_address || '').toLowerCase();
+        const candCat = normalizeDeptCode(cand.category || cand.department_code || cand.department);
+
+        // Check 1: Domain congruence
+        const candIsWater = /(నీళ్లు|నీరు|నీటి|nelu|neelu|neellu|neeru|water|drinking|పైపు|కుళాయి|బోరు|ravatledu|ravadham)/i.test(candFull);
+        const candIsDrainage = /(డ్రైనేజీ|drainage|murugu|sewage|overflow|కాలువ|మ్యాన్‌హోల్)/i.test(candFull);
+        const candIsRoad = /(రోడ్డు|గుంత|pothole|road|asphalt|crater|రహదారి)/i.test(candFull);
+        const candIsLight = /(స్ట్రీట్ లైట్|street light|current|deepalu|చీకటి|స్తంభం)/i.test(candFull);
+        const candIsSanitation = /(చెత్త|garbage|trash|waste|chetha|కుప్పలు|దుర్గంధం)/i.test(candFull);
+
+        const deptCongruent = (inputCat && candCat && inputCat === candCat) ||
+          (isWater && candIsWater) ||
+          (isDrainage && candIsDrainage) ||
+          (isRoad && candIsRoad) ||
+          (isLight && candIsLight) ||
+          (isSanitation && candIsSanitation);
+
+        if (!deptCongruent) continue;
+
+        // Check 2: Geospatial & locality proximity
+        let geoScore = 0.0;
+        let distMeters = 999999;
+        const reasons: string[] = [];
+
+        if (data.location_lat != null && data.location_lng != null && cand.location_lat != null && cand.location_lng != null) {
+          distMeters = calculateHaversineMeters(data.location_lat, data.location_lng, cand.location_lat, cand.location_lng);
+          if (distMeters <= 30) {
+            geoScore = 1.0;
+            reasons.push(`Exact same spot (${distMeters.toFixed(0)}m away)`);
+          } else if (distMeters <= 100) {
+            geoScore = 0.85;
+            reasons.push(`Same street vicinity (${distMeters.toFixed(0)}m away)`);
+          } else if (distMeters <= 250) {
+            geoScore = 0.50;
+          }
+        }
+
+        const locSim = calculateLocalitySimilarity(inputAddr, candAddr);
+        if (inputAddr && candAddr && (inputAddr.includes(candAddr) || candAddr.includes(inputAddr))) {
+          geoScore = Math.max(geoScore, 0.95);
+          distMeters = Math.min(distMeters, 10);
+          reasons.push('Matching street address / colony');
+        } else if (locSim >= 0.35) {
+          geoScore = Math.max(geoScore, 0.85);
+          distMeters = Math.min(distMeters, 25);
+          reasons.push('Same neighborhood locality');
+        } else if (locSim > 0.15) {
+          geoScore = Math.max(geoScore, 0.65);
+          distMeters = Math.min(distMeters, 50);
+        }
+
+        if (geoScore < 0.50) continue;
+
+        // Check 3: Text defect congruence
+        let textScore = 0.40;
+        if ((isWater && candIsWater) || (isDrainage && candIsDrainage) || (isRoad && candIsRoad) || (isLight && candIsLight)) {
+          textScore = 0.92;
+          reasons.push('Identical civic defect category');
+        }
+
+        const composite = 0.55 * geoScore + 0.45 * textScore;
+        if (composite >= 0.65 && composite > highestScore) {
+          highestScore = composite;
+          bestMatch = {
+            is_duplicate: true,
+            master_complaint_id: cand.id,
+            master_title: cand.title,
+            similarity_score: Math.round(composite * 100) / 100,
+            distance_meters: Math.round(distMeters),
+            reasons
+          };
+        }
+      }
+
+      if (bestMatch) {
+        return bestMatch;
+      }
+    } catch (e) {
+      console.warn('Client duplicate check exception:', e);
+    }
+
     return { is_duplicate: false };
   },
 

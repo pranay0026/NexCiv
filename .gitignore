@@ -53,4 +53,5 @@ pnpm-debug.log*
 # System generated logs & scratch
 .system_generated/
 snap*.png
+backend/data/tables/
 

@@ -89,6 +89,11 @@ interface WorkItem {
   deadlineFormatted?: string;
   escalationLevel?: number;
   rejectionReason?: string;
+  isDuplicate?: boolean;
+  masterComplaintId?: string;
+  masterCode?: string;
+  duplicateCount?: number;
+  upvoteCount?: number;
 }
 
 const INITIAL_WORK_QUEUE: WorkItem[] = [];
@@ -398,8 +403,63 @@ export default function AnalyticsPortal() {
     })
       .then((data: any[]) => {
         if (data && data.length > 0) {
+          // Dynamic Intelligent Deduplication & Cluster Linking
+          const masterMap = new Map<string, any>();
+          const duplicatesMap = new Map<string, { masterId: string; masterCode: string }>();
+          const dupCountMap = new Map<string, number>();
+
+          // Sort so earliest report is considered the primary Master Incident
+          const sortedItems = [...data].sort((a, b) => {
+            const tA = new Date(a.created_at || a.submitted_at || 0).getTime();
+            const tB = new Date(b.created_at || b.submitted_at || 0).getTime();
+            return tA - tB;
+          });
+
+          for (const item of sortedItems) {
+            // If already marked as duplicate from backend / storage
+            if (item.is_duplicate && item.master_complaint_id) {
+              const masterCode = item.master_complaint_id.length > 8 ? `NXC-${item.master_complaint_id.slice(0, 6).toUpperCase()}` : item.master_complaint_id;
+              duplicatesMap.set(item.id, { masterId: item.master_complaint_id, masterCode });
+              dupCountMap.set(item.master_complaint_id, (dupCountMap.get(item.master_complaint_id) || 0) + 1);
+              continue;
+            }
+
+            // Otherwise, dynamically cluster by locality and civic intent
+            const itemText = [item.title, item.description].filter(Boolean).join(' ').toLowerCase();
+            const itemAddr = (item.location_address || '').toLowerCase();
+            const isWater = /(నీళ్లు|నీరు|నీటి|nelu|neelu|neellu|neeru|water|drinking|పైపు|కుళాయి|బోరు|ravatledu|ravadham)/i.test(itemText);
+            const isDrainage = /(డ్రైనేజీ|drainage|murugu|sewage|overflow|కాలువ|మ్యాన్‌హోల్)/i.test(itemText);
+            const isRoad = /(రోడ్డు|గుంత|pothole|road|asphalt|crater|రహదారి)/i.test(itemText);
+            const isLight = /(స్ట్రీట్ లైట్|street light|current|deepalu|చీకటి|స్తంభం)/i.test(itemText);
+            const isSanitation = /(చెత్త|garbage|trash|waste|chetha|కుప్పలు|దుర్గంధం)/i.test(itemText);
+
+            const domainKey = isWater ? 'water' : isDrainage ? 'drainage' : isRoad ? 'road' : isLight ? 'light' : isSanitation ? 'sanitation' : (item.category || item.department_code || 'other');
+
+            const cleanLoc = itemAddr.replace(/\[.*?\]/g, ' ').replace(/[^\w\s]/g, ' ').toLowerCase();
+            const locTokens = cleanLoc.split(/\s+/).filter((t: string) => t.length > 3 && !['andhra', 'pradesh', 'india', 'urban', 'rural', 'corporation', 'municipal'].includes(t));
+            const primaryLoc = locTokens.slice(0, 2).sort().join('_');
+            const groupKey = `${item.municipal_corporation || 'DEF'}_${domainKey}_${primaryLoc || 'area'}`;
+
+            if (masterMap.has(groupKey)) {
+              const master = masterMap.get(groupKey);
+              if (master.id !== item.id) {
+                const masterCode = master.id.length > 8 ? `NXC-${master.id.slice(0, 6).toUpperCase()}` : master.id;
+                duplicatesMap.set(item.id, { masterId: master.id, masterCode });
+                dupCountMap.set(master.id, (dupCountMap.get(master.id) || 0) + 1);
+              }
+            } else {
+              masterMap.set(groupKey, item);
+            }
+          }
+
           const mappedQueue: WorkItem[] = data.map((c: any) => {
             const shortCode = c.id.length > 8 ? `NXC-${c.id.slice(0, 6).toUpperCase()}` : c.id;
+            const dupInfo = duplicatesMap.get(c.id);
+            const isDuplicate = Boolean(c.is_duplicate || dupInfo);
+            const masterComplaintId = c.master_complaint_id || dupInfo?.masterId;
+            const masterCode = dupInfo?.masterCode || (masterComplaintId ? (masterComplaintId.length > 8 ? `NXC-${masterComplaintId.slice(0, 6).toUpperCase()}` : masterComplaintId) : undefined);
+            const duplicateCount = (c.duplicate_count || 0) + (dupCountMap.get(c.id) || 0);
+
             const statusLabel =
               c.status === 'pending' ? 'Awaiting assignment' :
               c.status === 'in_progress' ? 'In progress' :
@@ -425,7 +485,12 @@ export default function AnalyticsPortal() {
               isOverdue: c.sla_is_overdue,
               deadlineFormatted: c.deadline_formatted,
               escalationLevel: c.escalation_level,
-              rejectionReason: c.rejection_reason
+              rejectionReason: c.rejection_reason,
+              isDuplicate,
+              masterComplaintId,
+              masterCode,
+              duplicateCount,
+              upvoteCount: (c.upvote_count || 1) + (dupCountMap.get(c.id) || 0)
             };
           });
           setWorkQueue(mappedQueue);
@@ -2314,7 +2379,16 @@ export default function AnalyticsPortal() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-base font-bold text-slate-900">Work assignment & queue</h3>
-                  <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 uppercase tracking-wider">Live Work Queue &middot; {workQueue.length} Active</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 uppercase tracking-wider">
+                      Live Work Queue &middot; {workQueue.length} Active
+                    </span>
+                    {workQueue.some((x) => x.isDuplicate) && (
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 uppercase tracking-wider">
+                        {workQueue.filter((x) => x.isDuplicate).length} Duplicate Reports Linked
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <button
@@ -2336,10 +2410,26 @@ export default function AnalyticsPortal() {
                   workQueue.map((item) => (
                     <div
                       key={item.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition"
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border transition ${
+                        item.isDuplicate
+                          ? 'border-amber-200 bg-amber-50/30 hover:bg-amber-50/50'
+                          : 'border-slate-100 bg-slate-50/50 hover:bg-slate-50'
+                      }`}
                     >
-                      <div>
-                        <div className="text-xs font-bold text-slate-900">{item.title}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-slate-900">{item.title}</span>
+                          {item.isDuplicate && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              ⚡ DUPLICATE &middot; LINKED TO {item.masterCode || 'MASTER'}
+                            </span>
+                          )}
+                          {!item.isDuplicate && (item.duplicateCount ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                              ★ MASTER INCIDENT (+{item.duplicateCount} Citizen Reports)
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-slate-400">{item.code} &middot; {item.location}</div>
                       </div>
 
@@ -2351,10 +2441,12 @@ export default function AnalyticsPortal() {
                         {item.timeAgo}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         <span
                           className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                            item.status === 'Awaiting assignment'
+                            item.isDuplicate
+                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                              : item.status === 'Awaiting assignment'
                               ? 'bg-amber-50 text-amber-800 border border-amber-200'
                               : item.status === 'Under review'
                               ? 'bg-blue-50 text-blue-700 border border-blue-200'
@@ -2363,19 +2455,33 @@ export default function AnalyticsPortal() {
                               : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           }`}
                         >
-                          {item.status}
+                          {item.isDuplicate ? 'Duplicate Incident' : item.status}
                         </span>
                         {item.status !== 'Resolved' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAssignCaseId(item.id || item.code);
-                              setAssignModalOpen(true);
-                            }}
-                            className="px-2 py-0.5 text-[10px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-600 hover:text-white rounded border border-teal-200 transition cursor-pointer"
-                          >
-                            Assign
-                          </button>
+                          item.isDuplicate ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAssignCaseId(item.masterComplaintId || item.id);
+                                setAssignModalOpen(true);
+                              }}
+                              className="px-2 py-0.5 text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-600 hover:text-white rounded border border-amber-300 transition cursor-pointer"
+                              title="Assign or view the master incident"
+                            >
+                              View Master
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAssignCaseId(item.id || item.code);
+                                setAssignModalOpen(true);
+                              }}
+                              className="px-2 py-0.5 text-[10px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-600 hover:text-white rounded border border-teal-200 transition cursor-pointer"
+                            >
+                              Assign
+                            </button>
+                          )
                         )}
                       </div>
                     </div>

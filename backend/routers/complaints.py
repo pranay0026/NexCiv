@@ -539,19 +539,50 @@ def create_complaint(
 
         except Exception as e:
             print(f"Notice: Hybrid duplicate detection fallback: {e}")
-            clustering_engine = get_clustering_engine()
-            active_candidates = [c for c in _MEMORY_COMPLAINTS if c.get("status") != "resolved"]
+            active_candidates = []
+            if supabase is not None:
+                try:
+                    sup_res = supabase.table("complaints").select("*").neq("status", "resolved").limit(150).execute()
+                    if sup_res.data:
+                        active_candidates = sup_res.data
+                except Exception:
+                    pass
+            if not active_candidates:
+                active_candidates = [c for c in _MEMORY_COMPLAINTS if c.get("status") != "resolved"]
+
             duplicate_match = clustering_engine.find_duplicate(candidate_obj, active_candidates)
             if duplicate_match:
                 is_duplicate = True
                 master_complaint_id = duplicate_match['master_complaint_id']
     else:
         clustering_engine = get_clustering_engine()
-        active_candidates = [c for c in _MEMORY_COMPLAINTS if c.get("status") != "resolved"]
+        active_candidates = []
+        if supabase is not None:
+            try:
+                sup_res = supabase.table("complaints").select("*").neq("status", "resolved").limit(150).execute()
+                if sup_res.data:
+                    active_candidates = sup_res.data
+            except Exception:
+                pass
+        if not active_candidates:
+            active_candidates = [c for c in _MEMORY_COMPLAINTS if c.get("status") != "resolved"]
+
         duplicate_match = clustering_engine.find_duplicate(candidate_obj, active_candidates)
         if duplicate_match:
             is_duplicate = True
             master_complaint_id = duplicate_match['master_complaint_id']
+
+    if is_duplicate and master_complaint_id and supabase is not None:
+        try:
+            m_res = supabase.table("complaints").select("id, upvote_count, duplicate_count").eq("id", master_complaint_id).execute()
+            if m_res.data:
+                m_row = m_res.data[0]
+                supabase.table("complaints").update({
+                    "upvote_count": (m_row.get("upvote_count") or 1) + 1,
+                    "duplicate_count": (m_row.get("duplicate_count") or 0) + 1
+                }).eq("id", master_complaint_id).execute()
+        except Exception as m_err:
+            print(f"Notice: Master incident count increment note: {m_err}")
 
     images = complaint.images or ([image_url] if image_url else [])
     if not image_url and images and len(images) > 0:
