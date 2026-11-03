@@ -114,9 +114,6 @@ export default function LandingPage() {
   const [categoryLabel, setCategoryLabel] = useState('');
   const [priority, setPriority] = useState('Medium');
   const [priorityScore, setPriorityScore] = useState<number | null>(null);
-  const [zoneType, setZoneType] = useState<string | null>(null);
-  const [zoneMultiplier, setZoneMultiplier] = useState<number | null>(null);
-  const [slaHours, setSlaHours] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [classifying, setClassifying] = useState(false);
@@ -402,13 +399,6 @@ export default function LandingPage() {
       }
       if (res.priority_score) {
         setPriorityScore(res.priority_score);
-      }
-      if (res.location_info) {
-        setZoneType(res.location_info.zone_type);
-        setZoneMultiplier(res.location_info.vulnerability_multiplier);
-      }
-      if (res.municipal_sla) {
-        setSlaHours(res.municipal_sla);
       }
     } catch (err) {
       console.warn('AI classification notice:', err);
@@ -1295,7 +1285,7 @@ export default function LandingPage() {
                 </div>
                 <div>
                   <h3 className="font-extrabold text-slate-900 text-base">Submit Civic Complaint</h3>
-                  <p className="text-xs text-slate-500">AI automatically detects department, priority & response SLA</p>
+                  <p className="text-xs text-slate-500">AI automatically classifies municipal department & grievance category</p>
                 </div>
               </div>
               <button
@@ -1808,39 +1798,25 @@ export default function LandingPage() {
                     </div>
                   </div>
 
-                  {/* Live AI Triage Feedback Banner */}
-                  {(priorityScore !== null || category) && (
-                    <div className="p-3.5 rounded-xl bg-gradient-to-r from-teal-50 via-sky-50 to-emerald-50 border border-teal-200 text-xs space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-extrabold text-slate-900 flex items-center gap-1.5">
-                            <BrainCircuit size={15} className="text-teal-600 animate-pulse" />
-                            <span>AI Automated Triage & Priority</span>
-                          </div>
-                          <div className="text-slate-600 text-[11px] mt-0.5">
-                            Department: <strong className="text-teal-800">{categoryLabel ? categoryLabel.toUpperCase() : (category ? category.toUpperCase() : 'ROADS & BUILDINGS')}</strong>
-                          </div>
+                  {/* Live AI Department Classification Confirmation (Priority Score completely removed for citizens) */}
+                  {category && (
+                    <div className="p-3.5 rounded-xl bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 text-xs flex items-center justify-between shadow-2xs">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                          <Sparkles size={14} />
                         </div>
-
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">AI PRIORITY SCORE</span>
-                          <span className={`text-lg font-black ${
-                            (priorityScore && priorityScore >= 75) || priority === 'Critical' ? 'text-rose-600' :
-                            (priorityScore && priorityScore >= 50) || priority === 'High' ? 'text-amber-600' : 'text-teal-600'
-                          }`}>
-                            {priorityScore !== null ? `${Math.round(priorityScore)}/100` : (priority === 'Critical' ? '98/100' : '65/100')}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-slate-900 block text-xs">
+                              AI Department Classification
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                              Auto-Classified
+                            </span>
+                          </div>
+                          <span className="text-slate-600 text-[11px] mt-0.5 block">
+                            Assigned to: <strong className="text-teal-800">{categoryLabel ? categoryLabel.toUpperCase() : category.toUpperCase()}</strong>
                           </span>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-teal-100 text-[11px]">
-                        <div>
-                          <span className="text-slate-500">Hazard Multiplier:</span>{' '}
-                          <strong className="text-slate-800">{zoneType ? `${zoneType.toUpperCase()} (${zoneMultiplier}x)` : 'Standard Zone (1.0x)'}</strong>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-slate-500">Response SLA:</span>{' '}
-                          <strong className="text-rose-700">{slaHours || (priority === 'Critical' ? '0 - 4 Hours' : '24 Hours')}</strong>
                         </div>
                       </div>
                     </div>
@@ -2059,7 +2035,7 @@ export default function LandingPage() {
                       </div>
                       <div className="flex items-center gap-2.5 text-xs text-emerald-600 font-bold">
                         <CheckCircle2 size={16} />
-                        <span>2. AI Priority & Zone Scored ({Math.round(trackedComplaint.priority_score ?? 50)}/100)</span>
+                        <span>2. AI Department Classified & Formally Registered</span>
                       </div>
                       <div className="flex items-center gap-2.5 text-xs text-teal-600 font-bold">
                         <Clock size={16} className="animate-spin" />
