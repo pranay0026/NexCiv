@@ -322,9 +322,11 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
     imgData = images[0] || null,
     locAddress = location,
     lat = locationLat,
-    lng = locationLng
+    lng = locationLng,
+    titleText = title
   ) => {
-    if (!descText.trim() && !imgData) return;
+    const combinedText = [titleText, descText].filter(Boolean).join(' ').trim();
+    if (!combinedText && !imgData) return;
 
     try {
       setClassifying(true);
@@ -333,7 +335,8 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
         imgData || undefined,
         locAddress || undefined,
         lat || undefined,
-        lng || undefined
+        lng || undefined,
+        titleText
       );
 
       if (res.wing) {
@@ -346,7 +349,7 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
       if (res.location_info) {
         setZoneType(res.location_info.zone_type || 'residential');
       }
-      runDuplicateCheck(descText, res.wing || category, lat, lng, locAddress, imgData);
+      runDuplicateCheck(combinedText, res.wing || category, lat, lng, locAddress, imgData);
     } catch (err) {
       console.error('Classification error:', err);
     } finally {
@@ -477,15 +480,21 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
     runClassification(description, updated[0] || null, location, locationLat, locationLng);
   };
 
+  const handleTitleBlur = () => {
+    if (title.trim().length >= 3) {
+      runClassification(description, images[0] || null, location, locationLat, locationLng, title);
+    }
+  };
+
   const handleDescriptionBlur = () => {
-    if (description.trim().length >= 8) {
-      runClassification(description, images[0] || null, location, locationLat, locationLng);
+    if (description.trim().length >= 4) {
+      runClassification(description, images[0] || null, location, locationLat, locationLng, title);
     }
   };
 
   const handleLocationBlur = () => {
     if (location.trim().length >= 3) {
-      runClassification(description, images[0] || null, location, locationLat, locationLng);
+      runClassification(description, images[0] || null, location, locationLat, locationLng, title);
     }
   };
 
@@ -506,7 +515,8 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
           images[0] || undefined,
           location || undefined,
           locationLat || undefined,
-          locationLng || undefined
+          locationLng || undefined,
+          title
         );
         finalCategory = res.wing || 'others';
       }
@@ -879,6 +889,7 @@ export default function ComplaintForm({ onComplaintAdded }: { onComplaintAdded: 
               placeholder="ఉదా: రోడ్డుపై పెద్ద గుంతలు / e.g. Deep road crater near Benz Circle"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleTitleBlur}
             />
             <button
               type="button"

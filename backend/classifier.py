@@ -103,6 +103,122 @@ def _haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -
     return float(R * c)
 
 
+MULTILINGUAL_INTENT_RULES = {
+    'water_supply': {
+        'pure_telugu': [
+            r'నీళ్లు', r'నీరు', r'నీటి', r'తాగునీరు', r'మంచినీరు', r'పైప్‌లైన్', r'పైపు',
+            r'కుళాయి', r'బోరు', r'మోటారు', r'నీటి సమస్య', r'నీటి కొరత', r'నీటి సరఫరా',
+            r'నీటి లీకేజీ', r'నీళ్లు రావడం లేదు', r'నీటి కాలుష్యం'
+        ],
+        'romanized': [
+            r'\bnelu\b', r'\bneelu\b', r'\bneellu\b', r'\bneeru\b', r'\bneeti\b',
+            r'\btaguneeru\b', r'\btaaguneeru\b', r'\bmanchineellu\b', r'\bravadham\b',
+            r'\bravatledu\b', r'\bravadam ledu\b', r'\bravatam ledu\b', r'\bneellu levu\b',
+            r'\bdrinking water\b', r'\bwater problem\b', r'\bwater shortage\b',
+            r'\bpipeline\b', r'\bpaipu\b', r'\bkulaayi\b', r'\bkulayi\b', r'\bborewell\b'
+        ],
+        'english': [
+            r'\bwater\b', r'\bdrinking water\b', r'\bpipeline\b', r'\bleakage\b',
+            r'\btap\b', r'\bwater supply\b', r'\bshortage\b', r'\bcontamination\b',
+            r'\bwater tank\b', r'\bborewell\b', r'\blow pressure\b', r'\bno water\b'
+        ],
+        'subtypes': [
+            ('pipeline_leakage', [r'leakage', r'leak', r'burst', r'pagilipoindi', r'లీకేజ్', r'లీకేజీ', r'పగిలిపోయింది']),
+            ('water_contamination', [r'contamination', r'contaminated', r'dirty', r'smell', r'మురికి', r'కాలుష్య']),
+            ('low_water_pressure', [r'low pressure', r'pressure', r'thakkuva', r'తక్కువ ప్రెషర్']),
+            ('no_water_supply', [r'ravatledu', r'ravadham ledu', r'ravadam ledu', r'levu', r'shortage', r'no water', r'రావడం లేదు', r'రాలేదు', r'కొరత', r'ఆగిపోయింది', r'రెండు రోజులు'])
+        ],
+        'default_subtype': 'no_water_supply'
+    },
+    'drainage': {
+        'pure_telugu': [
+            r'డ్రైనేజీ', r'డ్రైనేజి', r'మురుగు', r'మురుగునీరు', r'కాలువ', r'మ్యాన్‌హోల్',
+            r'పొంగిపొర్లు', r'మురుగు కాలువ', r'సెప్టిక్', r'గట్టర్'
+        ],
+        'romanized': [
+            r'\bdrainage\b', r'\bdrain\b', r'\bmurugu\b', r'\bmuruguneeru\b', r'\bkaluva\b',
+            r'\bmanhole\b', r'\bponguthondi\b', r'\bpongiporluthondi\b', r'\bsewage\b', r'\bgutter\b'
+        ],
+        'english': [
+            r'\bdrain\b', r'\bdrainage\b', r'\bsewer\b', r'\bsewerage\b', r'\boverflow\b',
+            r'\bmanhole\b', r'\bgutter\b', r'\bsewage leakage\b', r'\bclogged\b'
+        ],
+        'subtypes': [
+            ('open_manhole', [r'open manhole', r'manhole open', r'మూత లేదు', r'తెరిచి ఉంది']),
+            ('blocked_drainage', [r'blocked', r'clogged', r'choke', r'జామ్', r'బ్లాక్']),
+            ('sewage_leakage', [r'leakage', r'leak', r'లీక్']),
+            ('drainage_overflow', [r'overflow', r'ponguthondi', r'pongiporluthondi', r'పొంగిపొర్లు', r'పొంగుతోంది'])
+        ],
+        'default_subtype': 'drainage_overflow'
+    },
+    'road': {
+        'pure_telugu': [
+            r'రోడ్డు', r'రోడ్', r'గుంత', r'గుంతలు', r'రహదారి', r'ఫుట్‌పాత్', r'తారు రోడ్డు',
+            r'డివైడర్', r'స్పీడ్ బ్రేకర్'
+        ],
+        'romanized': [
+            r'\broad\b', r'\broads\b', r'\bguntha\b', r'\bgunthalu\b', r'\bpothole\b',
+            r'\bpotholes\b', r'\basphalt\b', r'\bfootpath\b', r'\bcrater\b', r'\bcraters\b'
+        ],
+        'english': [
+            r'\broad\b', r'\broads\b', r'\bpothole\b', r'\bpotholes\b', r'\bcrater\b',
+            r'\bcraters\b', r'\basphalt\b', r'\bfootpath\b', r'\bpavement\b', r'\bflyover\b',
+            r'\bspeed breaker\b', r'\bhighway\b'
+        ],
+        'subtypes': [
+            ('footpath_damage', [r'footpath', r'pavement', r'ఫుట్‌పాత్']),
+            ('road_obstruction', [r'obstruction', r'tree fell', r'చెట్టు', r'అడ్డంకి']),
+            ('damaged_roads', [r'damaged road', r'damage', r'పాడైపోయింది', r'broken']),
+            ('potholes', [r'pothole', r'potholes', r'guntha', r'gunthalu', r'crater', r'గుంత', r'గుంతలు'])
+        ],
+        'default_subtype': 'potholes'
+    },
+    'street_lights': {
+        'pure_telugu': [
+            r'స్ట్రీట్ లైట్', r'స్ట్రీట్‌లైట్', r'వీధి దీపాలు', r'దీపాలు', r'కరెంట్',
+            r'స్తంభం', r'లైట్లు', r'కరెంట్ వైర్లు', r'ట్రాన్స్‌ఫార్మర్', r'చీకటి'
+        ],
+        'romanized': [
+            r'\bstreet light\b', r'\bstreetlight\b', r'\bstreet lights\b', r'\bdeepalu\b',
+            r'\bcurrent\b', r'\bstambham\b', r'\bvelagadam ledu\b', r'\bvelagatam ledu\b',
+            r'\bchikatiga\b', r'\bdarkness\b', r'\belectric pole\b', r'\btransformer\b', r'\bwires\b'
+        ],
+        'english': [
+            r'\bstreet light\b', r'\bstreetlight\b', r'\bstreet lights\b', r'\belectric pole\b',
+            r'\bdark\b', r'\bdarkness\b', r'\bexposed wire\b', r'\btransformer\b', r'\bpower cut\b',
+            r'\bblackout\b', r'\blamp post\b'
+        ],
+        'subtypes': [
+            ('exposed_electrical_wires', [r'wire', r'wires', r'spark', r'షాక్', r'తీగలు', r'exposed']),
+            ('damaged_electric_pole', [r'pole', r'stambham', r'వంగిపోయింది', r'కూలిపోయింది', r'damaged pole']),
+            ('street_light_failure', [r'velagadam ledu', r'not working', r'off', r'dark', r'చీకటి', r'failure'])
+        ],
+        'default_subtype': 'street_light_failure'
+    },
+    'others': {
+        'pure_telugu': [
+            r'చెత్త', r'వ్యర్థాలు', r'దుర్గంధం', r'స్వచ్ఛ', r'చెత్తకుండీ', r'చచ్చిన జంతువు',
+            r'పారిశుధ్యం', r'కంపు', r'డస్ట్‌బిన్'
+        ],
+        'romanized': [
+            r'\bchetha\b', r'\bkachra\b', r'\bdurgandham\b', r'\bgarbage\b', r'\btrash\b',
+            r'\bwaste\b', r'\bdustbin\b', r'\bdead animal\b', r'\bswachh\b', r'\bkampu\b'
+        ],
+        'english': [
+            r'\bgarbage\b', r'\btrash\b', r'\bwaste\b', r'\bdump\b', r'\bdustbin\b',
+            r'\bdead animal\b', r'\blitter\b', r'\bsanitation\b', r'\bfilth\b', r'\bstench\b'
+        ],
+        'subtypes': [
+            ('dead_animal_removal', [r'dead animal', r'dead dog', r'చచ్చిన జంతువు']),
+            ('garbage_collection_failure', [r'collection', r'not collected', r'ethadam ledu']),
+            ('public_sanitation_issue', [r'sanitation', r'filth', r'stench', r'దుర్గంధం', r'కంపు']),
+            ('garbage_accumulation', [r'garbage', r'trash', r'waste', r'chetha', r'కుప్పలు', r'చెత్త'])
+        ],
+        'default_subtype': 'garbage_accumulation'
+    }
+}
+
+
 class ComplaintClassifier:
     """Singleton classifier that loads the trained multimodal model and provides predictions."""
 
@@ -113,6 +229,41 @@ class ComplaintClassifier:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
+
+    def _analyze_multilingual_intent(self, text: str) -> Optional[Dict[str, Any]]:
+        """
+        High-precision multilingual intent anchor supporting:
+        - Pure Telugu Unicode (నీళ్లు, నీరు, రోడ్డు, డ్రైనేజీ, etc.)
+        - Romanized Telugu transliterations (nelu, neellu, ravadham ledu, etc.)
+        - English municipal terminology
+        """
+        if not text or not text.strip():
+            return None
+        clean = text.lower()
+        check_order = ['drainage', 'water_supply', 'street_lights', 'road', 'others']
+        for dept in check_order:
+            cfg = MULTILINGUAL_INTENT_RULES[dept]
+            matches = []
+            for pat in cfg['pure_telugu'] + cfg['romanized'] + cfg['english']:
+                found = re.findall(pat, clean)
+                if found:
+                    matches.extend(found)
+            if matches:
+                chosen_subtype = cfg['default_subtype']
+                for stype, stype_pats in cfg['subtypes']:
+                    if any(re.search(p, clean) for p in stype_pats):
+                        chosen_subtype = stype
+                        break
+                prio = 'High' if dept in ['water_supply', 'drainage', 'road'] else 'Medium'
+                if any(re.search(p, clean) for p in [r'accident', r'hospital', r'hazard', r'fatal', r'burst', r'cyclone', r'తుఫాన్', r'danger', r'casualty']):
+                    prio = 'Critical'
+                return {
+                    'wing': dept,
+                    'complaint_type': chosen_subtype,
+                    'matched': list(set(matches)),
+                    'priority': prio
+                }
+        return None
 
     def load_model(self):
         if self._bundle is None:
@@ -247,14 +398,28 @@ class ComplaintClassifier:
         top_keywords = []
         text_score = 50.0
 
-        if self._bundle is not None:
+        clean_text = text.strip() if text else ""
+        intent = self._analyze_multilingual_intent(clean_text)
+
+        if intent:
+            wing = intent['wing']
+            wing_confidence = 0.98
+            complaint_type = intent['complaint_type']
+            complaint_type_conf = 0.96
+            priority = intent['priority']
+            priority_confidence = 0.95
+            all_probabilities = {code: 0.005 for code in DEPARTMENTS.keys()}
+            all_probabilities[wing] = 0.98
+            top_keywords = intent['matched']
+            prio_base_weights = {'Critical': 90.0, 'High': 75.0, 'Medium': 50.0, 'Low': 25.0}
+            text_score = prio_base_weights.get(priority, 75.0)
+        elif self._bundle is not None:
             try:
                 if isinstance(self._bundle, dict) and ('wing_pipeline' in self._bundle or 'pipeline' in self._bundle):
                     wing_pipe = self._bundle.get('wing_pipeline') or self._bundle.get('pipeline')
                     prio_pipe = self._bundle.get('prio_pipeline') or self._bundle.get('priority_pipeline')
 
-                    if text and text.strip():
-                        clean_text = text.strip()
+                    if clean_text:
                         wing = wing_pipe.predict([clean_text])[0]
                         w_probs = wing_pipe.predict_proba([clean_text])[0]
                         wing_confidence = float(np.max(w_probs))
@@ -298,9 +463,9 @@ class ComplaintClassifier:
                         except Exception:
                             top_keywords = []
                 else:
-                    if text and text.strip():
-                        wing = self._bundle.predict([text])[0]
-                        probs = self._bundle.predict_proba([text])[0]
+                    if clean_text:
+                        wing = self._bundle.predict([clean_text])[0]
+                        probs = self._bundle.predict_proba([clean_text])[0]
                         wing_confidence = float(np.max(probs))
             except Exception as e:
                 print(f"Prediction error: {e}")

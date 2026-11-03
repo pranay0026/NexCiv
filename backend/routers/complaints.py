@@ -374,9 +374,10 @@ def create_complaint(
     Executes multimodal AI classification, legal workflow classification (Act No. 6 of 2018 vs Citizen Charter),
     deadline calculation via SLA engine, computer vision damage inspection, and duplicate detection.
     """
-    # 1. Multimodal AI Classification
+    # 1. Multimodal AI Classification (Title + Description Fusion)
+    full_text = f"{complaint.title or ''} {complaint.description or ''}".strip()
     classification = classifier.classify_complaint(
-        text=complaint.description,
+        text=full_text,
         image_data=complaint.image_data or complaint.image_url,
         location_address=complaint.location_address,
         location_lat=complaint.location_lat,

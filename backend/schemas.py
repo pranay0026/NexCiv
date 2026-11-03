@@ -132,6 +132,7 @@ class DuplicateCheckResponse(BaseModel):
 
 
 class ClassifyRequest(BaseModel):
+    title: Optional[str] = None
     text: Optional[str] = ""
     image_data: Optional[str] = None
     location_address: Optional[str] = None
@@ -151,6 +152,8 @@ class ClassifyResponse(BaseModel):
     department: str
     department_code: str
     department_head: Optional[str] = None
+    complaint_type: Optional[str] = None
+    complaint_type_confidence: Optional[float] = None
     all_probabilities: Optional[Dict[str, float]] = None
     top_keywords: Optional[List[str]] = None
     image_analysis: Optional[Dict[str, Any]] = None

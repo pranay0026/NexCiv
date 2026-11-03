@@ -544,8 +544,10 @@ export const api = {
     imageData?: string,
     locationAddress?: string,
     locationLat?: number,
-    locationLng?: number
+    locationLng?: number,
+    title?: string
   ) {
+    const fullText = [title, text].filter(Boolean).join(' ').trim();
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 3500);
@@ -554,7 +556,8 @@ export const api = {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          text,
+          title,
+          text: fullText,
           image_data: imageData,
           location_address: locationAddress,
           location_lat: locationLat,
@@ -568,36 +571,89 @@ export const api = {
       }
     } catch {}
 
-    // Resilient Client-side heuristic classification fallback
-    const lower = (text + ' ' + (locationAddress || '')).toLowerCase();
+    // Resilient Multilingual Client-side classification engine (Telugu, Romanized Telugu, English)
+    const lower = (fullText + ' ' + (locationAddress || '')).toLowerCase();
+
+    // Multilingual Regex Matchers
+    const WATER_REGEX = /(నీళ్లు|నీరు|నీటి|తాగునీరు|మంచినీరు|పైప్‌లైన్|పైపు|కుళాయి|బోరు|మోటారు|\bnelu\b|\bneelu\b|\bneellu\b|\bneeru\b|\bneeti\b|\btaguneeru\b|\btaaguneeru\b|\bmanchineellu\b|\bravadham\b|\bravatledu\b|\bravadam ledu\b|\bravatam ledu\b|\bneellu levu\b|\bdrinking water\b|\bwater problem\b|\bwater shortage\b|\bwater\b|\bpipeline\b|\bdrinking\b|\bleakage\b|\btap\b|\bborewell\b|\blow pressure\b|\bno water\b)/i;
+    const DRAINAGE_REGEX = /(డ్రైనేజీ|డ్రైనేజి|మురుగు|మురుగునీరు|కాలువ|మ్యాన్‌హోల్|పొంగిపొర్లు|మురుగు కాలువ|సెప్టిక్|గట్టర్|\bdrainage\b|\bdrain\b|\bmurugu\b|\bmuruguneeru\b|\bkaluva\b|\bmanhole\b|\bponguthondi\b|\bpongiporluthondi\b|\bsewage\b|\bgutter\b|\bsewer\b|\bsewerage\b|\boverflow\b|\bclogged\b)/i;
+    const ROAD_REGEX = /(రోడ్డు|రోడ్|గుంత|గుంతలు|రహదారి|ఫుట్‌పాత్|తారు రోడ్డు|డివైడర్|స్పీడ్ బ్రేకర్|\broad\b|\broads\b|\bguntha\b|\bgunthalu\b|\bpothole\b|\bpotholes\b|\basphalt\b|\bfootpath\b|\bcrater\b|\bcraters\b|\bflyover\b|\bspeed breaker\b|\bhighway\b)/i;
+    const STREET_LIGHT_REGEX = /(స్ట్రీట్ లైట్|స్ట్రీట్‌లైట్|వీధి దీపాలు|దీపాలు|కరెంట్|స్తంభం|లైట్లు|కరెంట్ వైర్లు|ట్రాన్స్‌ఫార్మర్|చీకటి|\bstreet light\b|\bstreetlight\b|\bstreet lights\b|\bdeepalu\b|\bcurrent\b|\bstambham\b|\bvelagadam ledu\b|\bvelagatam ledu\b|\bvelagadamledhu\b|\bchikatiga\b|\bdarkness\b|\belectric\b|\bpole\b|\bspark\b|\bwires\b|\btransformer\b|\bblackout\b)/i;
+    const SANITATION_REGEX = /(చెత్త|వ్యర్థాలు|దుర్గంధం|స్వచ్ఛ|చెత్తకుండీ|చచ్చిన జంతువు|పారిశుధ్యం|కంపు|డస్ట్‌బిన్|\bchetha\b|\bkachra\b|\bdurgandham\b|\bgarbage\b|\btrash\b|\bwaste\b|\bdustbin\b|\bdead animal\b|\bswachh\b|\bkampu\b|\blitter\b|\bsanitation\b|\bfilth\b|\bstench\b)/i;
+
     let wing = 'others';
-    let wing_label = 'Sanitation & General Amenities';
+    let wing_label = 'Sanitation & Solid Waste Management Wing';
+    let confidence = 0.50;
     let priority: 'Critical' | 'High' | 'Medium' | 'Low' = 'Medium';
     let priority_score = 65.0;
+    let complaint_type = 'other_civic_issue';
 
-    if (lower.includes('pothole') || lower.includes('road') || lower.includes('asphalt') || lower.includes('crater') || lower.includes('flyover')) {
-      wing = 'road';
-      wing_label = 'Roads & Buildings Department';
-      priority_score = 82.5;
-      priority = 'High';
-    } else if (lower.includes('drain') || lower.includes('sewage') || lower.includes('overflow') || lower.includes('manhole')) {
+    if (DRAINAGE_REGEX.test(lower)) {
       wing = 'drainage';
-      wing_label = 'Drainage & Sewerage Department';
-      priority_score = 78.0;
+      wing_label = 'Public Health & Drainage Department';
+      confidence = 0.98;
       priority = 'High';
-    } else if (lower.includes('water') || lower.includes('pipeline') || lower.includes('drinking') || lower.includes('leakage')) {
+      priority_score = 82.0;
+      complaint_type = /(open manhole|manhole open|మూత లేదు|తెరిచి)/i.test(lower)
+        ? 'open_manhole'
+        : /(blocked|clogged|choke|జామ్|బ్లాక్)/i.test(lower)
+        ? 'blocked_drainage'
+        : /(leakage|leak|లీక్)/i.test(lower)
+        ? 'sewage_leakage'
+        : 'drainage_overflow';
+    } else if (WATER_REGEX.test(lower)) {
       wing = 'water_supply';
       wing_label = 'Water Supply & Quality Department';
-      priority_score = 88.0;
+      confidence = 0.98;
       priority = 'High';
-    } else if (lower.includes('light') || lower.includes('electric') || lower.includes('pole') || lower.includes('spark') || lower.includes('dark')) {
+      priority_score = 88.0;
+      complaint_type = /(leakage|leak|burst|pagilipoindi|లీకేజ్|లీకేజీ|పగిలిపోయింది)/i.test(lower)
+        ? 'pipeline_leakage'
+        : /(contamination|contaminated|dirty|smell|మురికి|కాలుష్య)/i.test(lower)
+        ? 'water_contamination'
+        : /(low pressure|pressure|thakkuva|తక్కువ)/i.test(lower)
+        ? 'low_water_pressure'
+        : 'no_water_supply';
+    } else if (ROAD_REGEX.test(lower)) {
+      wing = 'road';
+      wing_label = 'Roads & Buildings Department';
+      confidence = 0.98;
+      priority = 'High';
+      priority_score = 82.5;
+      complaint_type = /(footpath|pavement|ఫుట్‌పాత్)/i.test(lower)
+        ? 'footpath_damage'
+        : /(obstruction|tree fell|అడ్డంకి)/i.test(lower)
+        ? 'road_obstruction'
+        : /(damaged road|damage|kharab|పాడైపోయింది)/i.test(lower)
+        ? 'damaged_roads'
+        : 'potholes';
+    } else if (STREET_LIGHT_REGEX.test(lower)) {
       wing = 'street_lights';
       wing_label = 'Electrical & Street Lighting Wing';
-      priority_score = 75.0;
+      confidence = 0.98;
       priority = 'Medium';
+      priority_score = 75.0;
+      complaint_type = /(wire|wires|spark|షాక్|తీగలు)/i.test(lower)
+        ? 'exposed_electrical_wires'
+        : /(pole|stambham|వంగిపోయింది|కూలిపోయింది)/i.test(lower)
+        ? 'damaged_electric_pole'
+        : 'street_light_failure';
+    } else if (SANITATION_REGEX.test(lower)) {
+      wing = 'others';
+      wing_label = 'Sanitation & Solid Waste Management Wing';
+      confidence = 0.95;
+      priority = 'Medium';
+      priority_score = 65.0;
+      complaint_type = /(dead animal|dead dog|చచ్చిన)/i.test(lower)
+        ? 'dead_animal_removal'
+        : /(collection|ethadam ledu|తీసుకెళ్లడం లేదు)/i.test(lower)
+        ? 'garbage_collection_failure'
+        : /(sanitation|filth|stench|దుర్గంధం|కంపు)/i.test(lower)
+        ? 'public_sanitation_issue'
+        : 'garbage_accumulation';
     }
 
-    if (lower.includes('accident') || lower.includes('hospital') || lower.includes('hazard') || lower.includes('fatal') || lower.includes('burst')) {
+    if (/(accident|hospital|hazard|fatal|burst|cyclone|తుఫాన్|danger|casualty)/i.test(lower)) {
       priority = 'Critical';
       priority_score = Math.min(100.0, priority_score + 15.0);
     }
@@ -605,9 +661,13 @@ export const api = {
     return {
       wing,
       wing_label,
-      confidence: 0.94,
+      confidence,
       priority,
       priority_score,
+      category: wing,
+      department: wing_label,
+      department_code: wing,
+      complaint_type,
       location_info: {
         zone_type: lower.includes('hospital') ? 'hospital' : lower.includes('highway') ? 'highway' : 'residential',
         vulnerability_multiplier: lower.includes('hospital') ? 1.5 : 1.0
