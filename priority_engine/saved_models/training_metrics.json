@@ -1,0 +1,15 @@
+{
+  "dataset_samples": 10000,
+  "severity_model": {
+    "overall_accuracy": 1.0,
+    "macro_f1": 1.0,
+    "telugu_accuracy": 1.0,
+    "english_accuracy": 1.0
+  },
+  "priority_model": {
+    "algorithm": "LightGBM Regressor",
+    "mae": 0.010307374211720358,
+    "rmse": 0.09039316843230114,
+    "r2": 0.999985312494829
+  }
+}

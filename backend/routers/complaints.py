@@ -588,6 +588,76 @@ def create_complaint(
     if not image_url and images and len(images) > 0:
         image_url = images[0]
 
+    # Phase 3 AI Prioritization, SLA Deadline Calculation & Workforce Allocation
+    priority_explanation = None
+    is_emergency_override = False
+    try:
+        from ai_severity_engine import analyze_complaint_severity
+        from sla_service import compute_statutory_deadline
+        from ai_priority_engine import calculate_priority
+        from workforce_allocation_engine import allocate_complaint_to_workforce
+        from data_manager import _read_table
+
+        # 1. Evaluate Severity
+        sev_res = analyze_complaint_severity(
+            text=f"{complaint.title} - {complaint.description}",
+            category=category,
+            defect_type=defect_type,
+            location_address=complaint.location_address
+        )
+
+        # 2. Compute Statutory SLA
+        sla_res = compute_statutory_deadline(
+            category=category,
+            defect_type=defect_type
+        )
+
+        # 3. Calculate Explainable Priority Score & Emergency Check
+        prio_res = calculate_priority(
+            severity_info=sev_res,
+            sla_info=sla_res,
+            complaint_data={
+                "title": complaint.title,
+                "description": complaint.description,
+                "category": category,
+                "defect_type": defect_type,
+                "duplicate_count": 1 if is_duplicate else 0,
+                "upvote_count": upvote_count
+            }
+        )
+
+        priority = prio_res["priority_label"]
+        priority_score = prio_res["priority_score"]
+        priority_explanation = prio_res["explanation_summary"]
+        is_emergency_override = prio_res["is_emergency_override"]
+
+        # 4. Allocate to Eligible Workforce
+        all_emps = _read_table("employees")
+        alloc_res = allocate_complaint_to_workforce(
+            complaint={
+                "municipal_corporation": corp,
+                "department_code": department_code,
+                "category": category,
+                "defect_type": defect_type,
+                "priority": priority,
+                "location_lat": complaint.location_lat,
+                "location_lng": complaint.location_lng,
+                "ward": complaint.ward
+            },
+            all_employees=all_emps
+        )
+
+        if alloc_res.get("is_assigned"):
+            assigned_employee_id = alloc_res["assigned_employee_id"]
+            assigned_team = alloc_res["assigned_team"]
+            increment_employee_workload(assigned_employee_id)
+        else:
+            assigned_employee_id = None
+            assigned_team = alloc_res.get("assigned_team", f"{department} Queue (Unassigned)")
+
+    except Exception as e_ai:
+        print(f"Notice: Phase 3 AI Prioritization & Allocation note: {e_ai}")
+
     complaint_dict = {
         "id": item_id,
         "grievance_ref_number": grievance_ref_number,
@@ -602,6 +672,8 @@ def create_complaint(
         "landmark": complaint.landmark,
         "priority": priority,
         "priority_score": priority_score,
+        "priority_explanation": priority_explanation,
+        "is_emergency_override": is_emergency_override,
         "confidence": confidence,
         "location_lat": complaint.location_lat,
         "location_lng": complaint.location_lng,
@@ -622,7 +694,7 @@ def create_complaint(
         "sla_is_overdue": sla_is_overdue,
         "sla_overdue_hours": 0,
         "assigned_team": assigned_team,
-        "assigned_employee_id": complaint.assigned_employee_id,
+        "assigned_employee_id": assigned_employee_id or complaint.assigned_employee_id,
         "citizen_name": complaint.citizen_name or current_user.get("name") or "Citizen",
         "citizen_email": complaint.citizen_email or current_user.get("email"),
         "citizen_phone": complaint.citizen_phone,
@@ -860,17 +932,15 @@ def list_complaints(
             continue
         if status and status.lower() != 'all' and c_stat != status.lower():
             continue
-        // Enforce municipality isolation for employee role unless overridden by query param
-    if current_user and current_user.get('role') == 'employee':
-        user_muni = current_user.get('municipalityCode') or current_user.get('municipality_code')
-        if user_muni:
-            results = [c for c in results if c.get('municipal_corporation') == user_muni]
-    # Allow explicit query param to override (e.g., admin dashboards)
-    if municipal_corporation and municipal_corporation.lower() != 'all':
-        target_corp = municipal_corporation.strip().upper()
-        from data_manager import get_isolated_municipality_complaints
-        try:
-            results = get_isolated_municipality_complaints(target_corp)
+
+        # Enforce municipality isolation for employee role
+        if current_user and current_user.get('role') == 'employee':
+            user_muni = (current_user.get('municipalityCode') or current_user.get('municipality_code') or '').strip().upper()
+            if user_muni and c_corp != user_muni:
+                continue
+
+        # Allow explicit query param to filter municipality
+        if municipal_corporation and municipal_corporation.lower() != 'all':
             target_corp = municipal_corporation.strip().upper()
             if c_corp != target_corp and target_corp not in c_addr:
                 continue
@@ -934,23 +1004,20 @@ def get_analytics(
         if m.get("id") not in existing_ids:
             all_items.append(m)
 
-    // Enforce municipality isolation for employee role unless overridden by query param
+    # Enforce municipality isolation for employee role unless overridden
     if current_user and current_user.get('role') == 'employee':
-        user_muni = current_user.get('municipalityCode') or current_user.get('municipality_code')
+        user_muni = (current_user.get('municipalityCode') or current_user.get('municipality_code') or '').strip().upper()
         if user_muni:
-            results = [c for c in results if c.get('municipal_corporation') == user_muni]
-    # Allow explicit query param to override (e.g., admin dashboards)
+            all_items = [c for c in all_items if (c.get('municipal_corporation') or '').strip().upper() == user_muni]
+
+    # Allow explicit query param to filter municipality
     if municipal_corporation and municipal_corporation.lower() != 'all':
-        target_corp = municipal_corporation.strip().upper()
-        from data_manager import get_isolated_municipality_complaints
-        try:
-            results = get_isolated_municipality_complaints(target_corp)
         target_mc = municipal_corporation.strip().upper()
         from data_manager import get_isolated_municipality_complaints
         try:
             all_items = get_isolated_municipality_complaints(target_mc)
         except Exception:
-            all_items = [c for c in _MEMORY_COMPLAINTS if (c.get("municipal_corporation") or "").upper() == target_mc]
+            all_items = [c for c in all_items if (c.get("municipal_corporation") or "").upper() == target_mc]
 
     total_count = len(all_items)
 

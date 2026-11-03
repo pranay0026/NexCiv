@@ -383,3 +383,40 @@ class AcknowledgementReceipt(BaseModel):
     first_appellate_authority: str
     appeal_deadline_days: int
     compensation_applicable: bool
+
+
+class SLARuleCreate(BaseModel):
+    municipality_code: str
+    department: str
+    complaint_category: str
+    severity_level: str
+    resolution_duration: int
+    duration_unit: str = "days"
+    calendar_type: str = "working_days"
+    source_document: Optional[str] = None
+    source_url: Optional[str] = None
+    government_order_number: Optional[str] = None
+    effective_from: Optional[str] = None
+    effective_to: Optional[str] = None
+    verification_status: Optional[str] = "verified"
+    last_verified_at: Optional[str] = None
+
+
+class SLARuleResponse(BaseModel):
+    sla_rule_id: str
+    municipality_code: str
+    department: str
+    complaint_category: str
+    severity_level: str
+    resolution_duration: int
+    duration_unit: str
+    calendar_type: str
+    source_document: Optional[str] = None
+    source_url: Optional[str] = None
+    government_order_number: Optional[str] = None
+    effective_from: Optional[str] = None
+    effective_to: Optional[str] = None
+    verification_status: Optional[str] = None
+    last_verified_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None

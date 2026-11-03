@@ -72,6 +72,8 @@ interface ComplaintItem {
   locationLat?: number;
   locationLng?: number;
   description?: string;
+  priorityExplanation?: string;
+  isEmergencyOverride?: boolean;
 }
 
 const INITIAL_COMPLAINTS: ComplaintItem[] = [];
@@ -196,7 +198,20 @@ export default function EmployeeWorkspace() {
   // Fetch live workspace data from backend
   const fetchLiveWorkspaceData = async () => {
     try {
-      const empMunicipality = (profile as any)?.municipalityCode || (profile as any)?.municipalCorporation || (currentEmpCode.includes('-') && currentEmpCode.split('-').length === 3 ? currentEmpCode.split('-')[0] : undefined);
+      // Robust municipality extraction: strictly isolate workspace to employee's ULB
+      let empMunicipality = (profile as any)?.municipalityCode || (profile as any)?.municipalCorporation;
+      if (!empMunicipality || empMunicipality === 'ALL') {
+        const knownULBs = ['ELR', 'GVMC', 'VMC', 'GMC', 'TMC', 'KMC', 'RMC', 'KKD', 'BVM', 'TPG', 'NMC', 'KADA', 'ATP'];
+        const tokens = currentEmpCode.toUpperCase().split('-');
+        for (const t of tokens) {
+          if (knownULBs.includes(t)) {
+            empMunicipality = t;
+            break;
+          }
+        }
+      }
+      if (!empMunicipality) empMunicipality = 'ELR';
+
       const [liveData, hotspotData, empData, empsList] = await Promise.all([
         api.getComplaints({ municipal_corporation: empMunicipality }).catch(() => []),
         api.getHotspots(100).catch(() => ({ total_hotspots: 0, hotspots: [] })),
@@ -256,7 +271,9 @@ export default function EmployeeWorkspace() {
             resolutionProofUrl: item.resolution_proof_url,
             locationLat: item.location_lat || 16.5062,
             locationLng: item.location_lng || 80.6480,
-            description: item.description
+            description: item.description,
+            priorityExplanation: item.priority_explanation || (Array.isArray(item.priority_explanation_points) ? item.priority_explanation_points.join(' | ') : undefined),
+            isEmergencyOverride: item.is_emergency_override
           };
         });
         setComplaints(mapped);
@@ -1102,6 +1119,19 @@ export default function EmployeeWorkspace() {
                               <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800">
                                 <span className="font-bold block text-[10px] uppercase">Statutory Rejection Grounds:</span>
                                 <span>{item.rejectionReason}</span>
+                              </div>
+                            )}
+
+                            {/* AI Priority Explainability Panel */}
+                            {item.priorityExplanation && (
+                              <div className="mt-2.5 p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80 text-xs text-slate-800">
+                                <div className="flex items-center gap-1.5 font-bold text-[11px] text-indigo-900 mb-1">
+                                  <Sparkles size={13} className="text-indigo-600 shrink-0" />
+                                  <span>Why was this complaint assigned {item.priority || 'High'} Priority?</span>
+                                </div>
+                                <p className="text-[11px] text-slate-700 leading-relaxed font-sans">
+                                  {item.priorityExplanation}
+                                </p>
                               </div>
                             )}
                           </div>

@@ -17,8 +17,15 @@ except Exception:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import complaints, classify, employees, auth, ai, compliance, investigations
+from routers import complaints, classify, employees, auth, ai, compliance, investigations, sla
 from classifier import get_classifier
+
+# Priority Engine & AI Task Router
+try:
+    from priority_engine.api.priority_api import router as priority_api_router
+except Exception as e:
+    print(f"Notice: Failed to import priority API router: {e}")
+    priority_api_router = None
 
 # Duplicate Detection & Master Incident Engine Integration
 try:
@@ -44,6 +51,9 @@ app.include_router(auth.router)
 app.include_router(ai.router)
 app.include_router(compliance.router)
 app.include_router(investigations.router)
+app.include_router(sla.router)
+if priority_api_router:
+    app.include_router(priority_api_router)
 if duplicate_router:
     app.include_router(duplicate_router)
 
