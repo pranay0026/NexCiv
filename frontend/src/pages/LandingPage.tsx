@@ -33,7 +33,15 @@ import {
   Lightbulb,
   Droplets,
   Navigation,
-  Eye
+  Eye,
+  Mic,
+  MicOff,
+  Video,
+  RefreshCw,
+  Languages,
+  Square,
+  Sparkles,
+  Plus
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -118,6 +126,190 @@ export default function LandingPage() {
   const [submittedComplaintId, setSubmittedComplaintId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Language & Voice State for Complaint Modal
+  const [speechLang, setSpeechLang] = useState<'te-IN' | 'en-IN'>('te-IN');
+  const [isListening, setIsListening] = useState(false);
+  const [activeSpeechField, setActiveSpeechField] = useState<'title' | 'description' | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const baseTextRef = useRef<string>('');
+
+  // Camera State for Complaint Modal
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.warn('Speech stop warning:', e);
+      }
+    }
+    setIsListening(false);
+    setActiveSpeechField(null);
+  };
+
+  const startListening = (targetField: 'title' | 'description' = 'description') => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setFormError('Speech recognition is not supported in this browser. Please use Chrome, Edge, or mobile browser, or type in Telugu / English.');
+      return;
+    }
+
+    if (isListening) {
+      stopListening();
+      return;
+    }
+
+    baseTextRef.current = targetField === 'title' ? title : description;
+    setFormError('');
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = speechLang;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognitionRef.current = recognition;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setActiveSpeechField(targetField);
+      };
+
+      recognition.onresult = (event: any) => {
+        let currentTranscript = '';
+        for (let i = 0; i < event.results.length; ++i) {
+          currentTranscript += event.results[i][0].transcript;
+        }
+
+        const combined = baseTextRef.current.trim()
+          ? `${baseTextRef.current.trim()} ${currentTranscript}`
+          : currentTranscript;
+
+        if (targetField === 'title') {
+          setTitle(combined);
+        } else {
+          setDescription(combined);
+          if (combined.length >= 8) {
+            runClassification(combined, imagePreview, location, locationLat, locationLng);
+          }
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition notice:', event.error);
+        if (event.error !== 'no-speech') {
+          setFormError(`Microphone Notice: ${event.error === 'not-allowed' ? 'Microphone permission denied. Please allow microphone access.' : event.error}`);
+        }
+        stopListening();
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+        setActiveSpeechField(null);
+      };
+
+      recognition.start();
+    } catch (err: any) {
+      console.error('Speech recognition exception:', err);
+      setFormError('Could not initialize microphone. Please check permissions.');
+      setIsListening(false);
+      setActiveSpeechField(null);
+    }
+  };
+
+  const openCameraModal = async () => {
+    setFormError('');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      cameraInputRef.current?.click();
+      return;
+    }
+
+    setCameraModalOpen(true);
+    setCameraLoading(true);
+
+    try {
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: cameraFacing,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      setCameraLoading(false);
+    } catch (err: any) {
+      console.warn('Live camera stream error, falling back to camera file input:', err);
+      setCameraLoading(false);
+      setCameraModalOpen(false);
+      cameraInputRef.current?.click();
+    }
+  };
+
+  const closeCameraModal = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCameraModalOpen(false);
+    setCameraLoading(false);
+  };
+
+  const switchCameraFacing = async () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    const nextFacing = cameraFacing === 'environment' ? 'user' : 'environment';
+    setCameraFacing(nextFacing);
+    setCameraLoading(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: nextFacing },
+        audio: false
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch (err) {
+      console.warn('Switch camera error:', err);
+    } finally {
+      setCameraLoading(false);
+    }
+  };
+
+  const captureSnapshot = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+    closeCameraModal();
+
+    const updated = [...imagesList, dataUrl].slice(0, 4);
+    setImagesList(updated);
+    setImagePreview(updated[0]);
+    runClassification(description, updated[0], location, locationLat, locationLng);
+  };
 
   // Track Complaint State
   const [trackIdInput, setTrackIdInput] = useState('');
@@ -1168,19 +1360,139 @@ export default function LandingPage() {
                     </div>
                   )}
 
+                  {/* Smart Multimodal Bar: Voice Dictation & Live Camera */}
+                  <div className="p-3.5 bg-gradient-to-r from-teal-50 via-emerald-50/50 to-indigo-50 border border-teal-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <Sparkles size={16} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-slate-900">
+                            స్మార్ట్ వాయిస్ & కెమెరా &bull; Voice & Camera Mode
+                          </span>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-800">
+                            Multimodal
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          మాట్లాడండి (Telugu/English) లేదా కెమెరాతో లైవ్ ఫోటో తీయండి.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Language Toggle */}
+                      <div className="flex items-center gap-1 bg-white border border-slate-200 p-0.5 rounded-lg text-[11px] font-bold">
+                        <Languages size={13} className="text-teal-600 ml-1 shrink-0" />
+                        <button
+                          type="button"
+                          onClick={() => setSpeechLang('te-IN')}
+                          className={`px-2 py-0.5 rounded-md transition ${speechLang === 'te-IN' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          తెలుగు
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSpeechLang('en-IN')}
+                          className={`px-2 py-0.5 rounded-md transition ${speechLang === 'en-IN' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          English
+                        </button>
+                      </div>
+
+                      {/* Prominent Camera Button */}
+                      <button
+                        type="button"
+                        onClick={openCameraModal}
+                        className="px-3 py-1.5 rounded-xl text-xs font-black bg-slate-900 hover:bg-slate-800 text-white flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
+                        title="Open live camera to capture defect photo"
+                      >
+                        <Camera size={14} className="text-teal-400" />
+                        <span>కెమెరా (Camera)</span>
+                      </button>
+
+                      {/* Prominent Mic Button */}
+                      <button
+                        type="button"
+                        onClick={() => isListening ? stopListening() : startListening('description')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95 ${
+                          isListening
+                            ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse'
+                            : 'bg-teal-600 hover:bg-teal-700 text-white'
+                        }`}
+                        title="Speak to dictate complaint in Telugu or English"
+                      >
+                        {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+                        <span>{isListening ? 'ఆపండి (Stop)' : 'మైక్ (Speak)'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Active Voice Listening Banner */}
+                  {isListening && (
+                    <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl flex items-center justify-between gap-3 text-rose-900 animate-pulse shadow-xs">
+                      <div className="flex items-center gap-2 text-xs font-bold">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping inline-block" />
+                        <span>
+                          {speechLang === 'te-IN'
+                            ? `🎙️ వింటున్నారు (${activeSpeechField === 'title' ? 'శీర్షిక' : 'వివరాలు'})... తెలుగులో మాట్లాడండి...`
+                            : `🎙️ Listening (${activeSpeechField === 'title' ? 'Title' : 'Description'})... Speak now in English...`}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={stopListening}
+                        className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Square size={11} />
+                        <span>ఆపండి (Stop)</span>
+                      </button>
+                    </div>
+                  )}
+
                   {/* Title */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Complaint Subject / Title *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Hazardous deep pothole causing vehicle accidents near school"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Complaint Subject / Title *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => startListening('title')}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                          isListening && activeSpeechField === 'title'
+                            ? 'bg-rose-600 text-white animate-pulse'
+                            : 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200'
+                        }`}
+                        title="Speak Title in Telugu or English"
+                      >
+                        {isListening && activeSpeechField === 'title' ? <MicOff size={11} /> : <Mic size={11} />}
+                        <span>{isListening && activeSpeechField === 'title' ? 'ఆపండి' : '🎙️ మాట్లాడండి (Speak)'}</span>
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Hazardous deep pothole causing vehicle accidents near school"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className="w-full pl-3.5 pr-10 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => startListening('title')}
+                        className={`absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition ${
+                          isListening && activeSpeechField === 'title'
+                            ? 'text-rose-600 bg-rose-100'
+                            : 'text-slate-400 hover:text-teal-600'
+                        }`}
+                        title="Speak title"
+                      >
+                        <Mic size={14} />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Municipal Corporation & Ward Grid */}
@@ -1302,29 +1614,58 @@ export default function LandingPage() {
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
                         Detailed Description *
                       </label>
-                      {classifying && (
-                        <span className="text-[11px] text-teal-600 font-semibold flex items-center gap-1">
-                          <Loader2 size={12} className="animate-spin" />
-                          AI Analyzing...
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {classifying && (
+                          <span className="text-[11px] text-teal-600 font-semibold flex items-center gap-1">
+                            <Loader2 size={12} className="animate-spin" />
+                            AI Analyzing...
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => startListening('description')}
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                            isListening && activeSpeechField === 'description'
+                              ? 'bg-rose-600 text-white animate-pulse'
+                              : 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200'
+                          }`}
+                          title="Speak description in Telugu or English"
+                        >
+                          {isListening && activeSpeechField === 'description' ? <MicOff size={11} /> : <Mic size={11} />}
+                          <span>{isListening && activeSpeechField === 'description' ? 'ఆపండి (Stop)' : '🎙️ వాయిస్ మైక్ (Voice Mic)'}</span>
+                        </button>
+                      </div>
                     </div>
-                    <textarea
-                      required
-                      rows={3}
-                      placeholder="Describe what happened, approximate depth of damage, safety impact on vehicles or pedestrians..."
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      onBlur={() => {
-                        if (description.trim().length >= 8) {
-                          runClassification(description, imagePreview, location, locationLat, locationLng);
-                        }
-                      }}
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium resize-none"
-                    />
+                    <div className="relative">
+                      <textarea
+                        required
+                        rows={3}
+                        placeholder="Describe what happened, approximate depth of damage, safety impact on vehicles or pedestrians... (మీరు తెలుగులో లేదా ఇంగ్లీషులో మాట్లాడవచ్చు)"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        onBlur={() => {
+                          if (description.trim().length >= 8) {
+                            runClassification(description, imagePreview, location, locationLat, locationLng);
+                          }
+                        }}
+                        className="w-full pl-3.5 pr-10 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium resize-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => startListening('description')}
+                        className={`absolute right-2.5 top-2.5 p-1.5 rounded-lg transition ${
+                          isListening && activeSpeechField === 'description'
+                            ? 'text-rose-600 bg-rose-100'
+                            : 'text-slate-400 hover:text-teal-600'
+                        }`}
+                        title="Speak description"
+                      >
+                        <Mic size={15} />
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Multi-Photo Evidence Upload */}
+                  {/* Multi-Photo Evidence Upload & Live Camera */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -1332,6 +1673,23 @@ export default function LandingPage() {
                       </label>
                       <span className="text-[11px] text-slate-400">JPG/PNG up to 5MB each</span>
                     </div>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
 
                     {imagesList.length > 0 && (
                       <div className="grid grid-cols-4 gap-2 mb-2">
@@ -1355,24 +1713,58 @@ export default function LandingPage() {
                     )}
 
                     {imagesList.length < 4 && (
-                      <div
-                        onClick={() => fileInputRef.current?.click()}
-                        className="border-2 border-dashed border-slate-200 hover:border-teal-500 rounded-xl p-3.5 text-center cursor-pointer transition bg-slate-50/50 flex items-center justify-center gap-2"
-                      >
-                        <Camera size={18} className="text-teal-600" />
-                        <span className="text-xs text-slate-600 font-bold">
-                          {imagesList.length === 0 ? 'Click to upload photos as evidence' : '+ Add another photo'}
-                        </span>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={handleImageChange}
-                          className="hidden"
-                        />
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {/* 1. Take Photo with Camera */}
+                        <button
+                          type="button"
+                          onClick={openCameraModal}
+                          className="border-2 border-dashed border-teal-500 hover:border-teal-600 bg-teal-50/70 hover:bg-teal-100/60 rounded-xl p-3 text-center cursor-pointer transition flex items-center justify-center gap-2 group shadow-2xs"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-xs group-hover:scale-110 transition">
+                            <Camera size={14} />
+                          </div>
+                          <div className="text-left">
+                            <span className="text-xs font-black text-teal-900 block">📷 కెమెరా (Camera)</span>
+                            <span className="text-[10px] text-teal-700 font-semibold">Take Live Photo</span>
+                          </div>
+                        </button>
+
+                        {/* 2. Choose File from Gallery */}
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="border-2 border-dashed border-slate-300 hover:border-teal-500 bg-slate-50 hover:bg-slate-100 rounded-xl p-3 text-center cursor-pointer transition flex items-center justify-center gap-2 group shadow-2xs"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center shadow-2xs group-hover:bg-teal-100 group-hover:text-teal-700 transition">
+                            <Plus size={14} />
+                          </div>
+                          <div className="text-left">
+                            <span className="text-xs font-bold text-slate-800 block">గ్యాలరీ (Upload)</span>
+                            <span className="text-[10px] text-slate-400 font-semibold">Choose File</span>
+                          </div>
+                        </button>
                       </div>
                     )}
+
+                    {/* Direct Mobile Camera Trigger */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={openCameraModal}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 text-xs font-bold hover:bg-teal-100 transition cursor-pointer"
+                      >
+                        <Camera size={12} className="text-teal-600" />
+                        <span>📷 కెమెరాతో ఫోటో తీయండి</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200 transition cursor-pointer"
+                      >
+                        <Video size={12} className="text-slate-500" />
+                        <span>ఫోన్ కెమెరా (Mobile Camera)</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Citizen Contact Details */}
@@ -1479,6 +1871,76 @@ export default function LandingPage() {
               )}
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* INTERACTIVE LIVE CAMERA CAPTURE MODAL */}
+      {cameraModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 text-white rounded-3xl overflow-hidden max-w-lg w-full border border-slate-700 shadow-2xl space-y-4 p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-bold text-sm">
+                <Video size={16} className="text-teal-400" />
+                <span>Take Photo with Camera &bull; ఫోటో తీయండి</span>
+              </div>
+              <button
+                type="button"
+                onClick={closeCameraModal}
+                className="p-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Video Viewport */}
+            <div className="relative aspect-video bg-black rounded-2xl overflow-hidden flex items-center justify-center border border-slate-800">
+              {cameraLoading && (
+                <div className="flex items-center gap-2 text-teal-400 text-xs">
+                  <Loader2 size={20} className="animate-spin" />
+                  <span>కెమెరా ప్రారంభమవుతోంది... Initializing camera...</span>
+                </div>
+              )}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Camera Controls */}
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <button
+                type="button"
+                onClick={switchCameraFacing}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold flex items-center gap-1.5 transition text-slate-200"
+                title="Switch front/back camera"
+              >
+                <RefreshCw size={14} />
+                <span>Flip Camera</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={captureSnapshot}
+                className="px-6 py-2.5 rounded-full bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-sm flex items-center gap-2 shadow-lg transition active:scale-95 cursor-pointer"
+              >
+                <Camera size={18} />
+                <span>ఫోటో తీయండి (Capture)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  closeCameraModal();
+                  cameraInputRef.current?.click();
+                }}
+                className="text-xs text-slate-400 hover:text-white underline"
+              >
+                Native App
+              </button>
+            </div>
           </div>
         </div>
       )}
