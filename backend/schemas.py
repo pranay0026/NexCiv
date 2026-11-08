@@ -256,8 +256,8 @@ class InvestigationCreate(BaseModel):
     complaint_id: str
     investigation_performed: str
     location_inspected: Optional[str] = None
-    findings: str
-    action_taken: str
+    findings: str = "Site inspected by cadre engineer."
+    action_taken: Optional[str] = "Site inspection conducted; remedial actions initiated."
     supporting_evidence_urls: Optional[List[str]] = []
     is_resolved: bool
     inability_reason: Optional[str] = None
@@ -273,8 +273,8 @@ class InvestigationResponse(BaseModel):
     employee_name: str
     investigation_performed: str
     location_inspected: Optional[str] = None
-    findings: str
-    action_taken: str
+    findings: str = "Site inspected by cadre engineer."
+    action_taken: Optional[str] = "Site inspection conducted; remedial actions initiated."
     supporting_evidence_urls: List[str] = []
     is_resolved: bool
     inability_reason: Optional[str] = None

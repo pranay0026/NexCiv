@@ -339,7 +339,7 @@ export default function EmployeeWorkspace() {
         investigation_performed: siteInspectionConducted ? 'yes' : 'no',
         location_inspected: inspectionLocation,
         findings: investigationFindings || 'Site inspected by cadre engineer; observations recorded.',
-        action_taken: investigationActionTaken,
+        action_taken: investigationActionTaken.trim() || 'Site inspection conducted; remedial works in progress.',
         supporting_evidence_urls: investigationPhoto ? [investigationPhoto] : undefined,
         further_action_required: investigationNextSteps || undefined,
         is_resolved: investigationStatus === 'resolved',

@@ -36,6 +36,15 @@ except Exception as e:
 
 app = FastAPI(title="NEXCIV API", version="3.1.0")
 
+@app.middleware("http")
+async def normalize_path_middleware(request, call_next):
+    if "//" in request.scope.get("path", ""):
+        import re
+        request.scope["path"] = re.sub(r"/+", "/", request.scope["path"])
+        if "raw_path" in request.scope:
+            request.scope["raw_path"] = request.scope["path"].encode("ascii")
+    return await call_next(request)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r".*",
