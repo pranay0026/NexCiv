@@ -116,6 +116,14 @@ export interface ComplaintRecord {
   resolved_at?: string;
   created_at: string;
   updated_at: string;
+  queue_rank?: number;
+  queue_total?: number;
+  relative_percentile?: number;
+  priority_explanation?: string;
+  is_emergency_override?: boolean;
+  action_timeline?: any;
+  priority_trajectory?: any[];
+  estimated_resolution_time?: string;
 }
 
 export interface LegalServiceRule {
@@ -1949,6 +1957,17 @@ export const api = {
         created_at: new Date().toISOString()
       }
     ];
+  },
+
+  async getTimelinePriority(complaintId: string): Promise<any> {
+    try {
+      const cleanId = complaintId.startsWith('NXC-') ? complaintId.replace('NXC-', '') : complaintId;
+      const res = await fetch(`${API_URL}/api/complaints/${cleanId}/timeline-priority`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+    return null;
   },
 
   async submitFeedback(data: {

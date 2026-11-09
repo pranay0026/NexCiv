@@ -714,6 +714,22 @@ def create_complaint(
         "updated_at": now_str
     }
 
+    # Dynamic Multi-Complaint Queue Prioritization & Timeline Synthesis
+    try:
+        from dynamic_priority_timeline_engine import evaluate_complaint_and_update_department_queue
+        dyn_res = evaluate_complaint_and_update_department_queue(
+            complaint=complaint_dict,
+            all_complaints=_MEMORY_COMPLAINTS,
+            current_step="citizen_submission",
+            step_notes="Complaint registered by citizen; prioritized against active department queue."
+        )
+        priority = dyn_res["priority_tier"]
+        priority_score = dyn_res["priority_score"]
+        priority_explanation = dyn_res["explanation"]
+        is_emergency_override = dyn_res["is_emergency"]
+    except Exception as e_dyn:
+        print(f"Dynamic priority queue evaluation note: {e_dyn}")
+
     final_complaint = complaint_dict
 
     # 5. Insert into Supabase if connected
@@ -791,6 +807,26 @@ def create_complaint(
         action="Legal Applicability & SLA Assigned",
         new_status="pending",
         comments=f"Governing source: {legal_source}. Expected resolution: {deadline_formatted}."
+    )
+    record_activity_log(
+        complaint_id=item_id,
+        actor_role="system",
+        actor_name="AI Dynamic Queue Scheduler",
+        action="Department Priority & Action Timeline Synthesized",
+        new_status="pending",
+        comments=(
+            f"Prioritized vs active {department} queue: Rank #{complaint_dict.get('queue_rank', 1)} of "
+            f"{complaint_dict.get('queue_total', 1)} ({complaint_dict.get('relative_percentile', 100.0)}th percentile). "
+            f"Score: {priority_score}/100. Target ETR: {complaint_dict.get('estimated_resolution_time', 'Within SLA')}."
+        ),
+        metadata={
+            "priority_score": priority_score,
+            "priority_tier": priority,
+            "queue_rank": complaint_dict.get("queue_rank", 1),
+            "queue_total": complaint_dict.get("queue_total", 1),
+            "relative_percentile": complaint_dict.get("relative_percentile", 100.0),
+            "action_timeline": complaint_dict.get("action_timeline")
+        }
     )
 
     # 7. Automated Citizen Notification Receipt & Employee Work Order Dispatch
@@ -1319,6 +1355,19 @@ def update_complaint_status(
                     emp_to_resolve = m.get("assigned_employee_id")
                 if old_status != "resolved" and emp_to_resolve:
                     record_employee_resolution(emp_to_resolve, supabase)
+
+            # Re-evaluate dynamic queue priority upon status update
+            try:
+                from dynamic_priority_timeline_engine import evaluate_complaint_and_update_department_queue
+                evaluate_complaint_and_update_department_queue(
+                    complaint=m,
+                    all_complaints=_MEMORY_COMPLAINTS,
+                    current_step=f"status_transition_{new_status}",
+                    step_notes=payload.action_taken or payload.notes or f"Status updated to {new_status}"
+                )
+            except Exception as e_prio:
+                print(f"Dynamic priority status update note: {e_prio}")
+
             updated_record = m
             break
 
@@ -1408,6 +1457,19 @@ def assign_complaint(
             if m.get("status") == "pending":
                 m["status"] = "in_progress"
             m["updated_at"] = now_str
+
+            # Re-evaluate dynamic queue priority & refresh execution timeline
+            try:
+                from dynamic_priority_timeline_engine import evaluate_complaint_and_update_department_queue
+                evaluate_complaint_and_update_department_queue(
+                    complaint=m,
+                    all_complaints=_MEMORY_COMPLAINTS,
+                    current_step="officer_assignment",
+                    step_notes=f"Assigned to cadre officer {payload.employee_id} ({payload.assigned_team or 'Field Team'})"
+                )
+            except Exception as e_prio:
+                print(f"Dynamic priority assignment update note: {e_prio}")
+
             updated_record = m
             break
 
@@ -1421,8 +1483,12 @@ def assign_complaint(
 
     # Record Immutable Assignment / Reassignment Log
     actor_name = current_user.get("name") or "Department Head"
-    action_label = "Employee Reassigned" if old_assigned_emp else "Employee Assigned"
-    comment_text = f"Assigned to {payload.employee_id} ({payload.assigned_team or 'Field Team'})."
+    action_label = "Employee Reassigned" if old_assigned_emp else "Employee Assigned & Queue Re-evaluated"
+    comment_text = (
+        f"Assigned to {payload.employee_id} ({payload.assigned_team or 'Field Team'}). "
+        f"Dynamic Priority: {updated_record.get('priority', 'Medium')} ({updated_record.get('priority_score', 50.0)}/100). "
+        f"Queue Rank #{updated_record.get('queue_rank', 1)} of {updated_record.get('queue_total', 1)}."
+    )
     if payload.reassignment_reason:
         comment_text += f" Reason: {payload.reassignment_reason}"
 
@@ -1434,7 +1500,13 @@ def assign_complaint(
         action=action_label,
         previous_status=updated_record.get("status") if updated_record else "pending",
         new_status="in_progress",
-        comments=comment_text
+        comments=comment_text,
+        metadata={
+            "priority_score": updated_record.get("priority_score"),
+            "queue_rank": updated_record.get("queue_rank"),
+            "queue_total": updated_record.get("queue_total"),
+            "action_timeline": updated_record.get("action_timeline")
+        }
     )
 
     if supabase is not None:
@@ -1484,10 +1556,42 @@ def upvote_complaint(
             real_item_id = m.get("id") or complaint_id
             m["upvote_count"] = m.get("upvote_count", 1) + 1
             updated_record = m
+            # Re-evaluate dynamic queue priority upon community upvotes
+            try:
+                from dynamic_priority_timeline_engine import evaluate_complaint_and_update_department_queue
+                evaluate_complaint_and_update_department_queue(
+                    complaint=m,
+                    all_complaints=_MEMORY_COMPLAINTS,
+                    current_step="citizen_upvote",
+                    step_notes=f"Public endorsement received. Community upvotes increased to {m.get('upvote_count', 1)}."
+                )
+                record_activity_log(
+                    complaint_id=real_item_id,
+                    actor_role="citizen",
+                    actor_name="Civic Community",
+                    action="Priority Re-calculated by Community Endorsements",
+                    comments=(
+                        f"Complaint upvoted (Total: {m.get('upvote_count')}). "
+                        f"Queue Rank #{m.get('queue_rank', 1)} of {m.get('queue_total', 1)} in {m.get('department', 'division')}. "
+                        f"Priority: {m.get('priority')} ({m.get('priority_score')}/100)."
+                    ),
+                    metadata={
+                        "upvotes": m.get("upvote_count"),
+                        "priority_score": m.get("priority_score"),
+                        "queue_rank": m.get("queue_rank")
+                    }
+                )
+            except Exception as e_up:
+                print(f"Upvote dynamic priority recalculation note: {e_up}")
             break
 
     if updated_record:
         _save_all_local_complaints(_MEMORY_COMPLAINTS)
+        try:
+            from data_manager import save_complaint_isolated
+            save_complaint_isolated(updated_record)
+        except Exception:
+            pass
 
     if supabase is not None:
         try:
@@ -1496,6 +1600,69 @@ def upvote_complaint(
             pass
 
     if updated_record:
-        return {"id": real_item_id, "upvote_count": updated_record.get("upvote_count", 1)}
+        return {
+            "id": real_item_id,
+            "upvote_count": updated_record.get("upvote_count", 1),
+            "priority": updated_record.get("priority"),
+            "priority_score": updated_record.get("priority_score"),
+            "queue_rank": updated_record.get("queue_rank")
+        }
 
     return {"id": complaint_id, "upvote_count": 2}
+
+
+@router.get("/{complaint_id}/timeline-priority")
+def get_complaint_timeline_priority(
+    complaint_id: str,
+    supabase: Client = Depends(get_supabase)
+):
+    """
+    Returns the real-time AI dynamic priority breakdown, relative queue standing
+    against all complaints in the department, and synthesized execution timeline.
+    """
+    from dynamic_priority_timeline_engine import evaluate_complaint_and_update_department_queue
+    from data_manager import _read_table
+
+    matched = None
+    for m in _MEMORY_COMPLAINTS:
+        if _matches_complaint_id(m.get("id"), complaint_id) or _matches_complaint_id(m.get("grievance_ref_number", ""), complaint_id):
+            matched = m
+            break
+
+    if not matched:
+        complaints = _read_table("complaints")
+        for c in complaints:
+            if _matches_complaint_id(c.get("id"), complaint_id) or _matches_complaint_id(c.get("grievance_ref_number", ""), complaint_id):
+                matched = c
+                break
+
+    if not matched and supabase is not None:
+        try:
+            clean = complaint_id.strip()
+            res = supabase.table("complaints").select("*").eq("id", clean).execute()
+            if res.data and len(res.data) > 0:
+                matched = res.data[0]
+            else:
+                res2 = supabase.table("complaints").select("*").order("created_at", desc=True).limit(200).execute()
+                for c in (res2.data or []):
+                    if _matches_complaint_id(c.get("id"), clean) or _matches_complaint_id(c.get("grievance_ref_number", ""), clean):
+                        matched = c
+                        break
+        except Exception:
+            pass
+
+    if not matched:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+
+    all_cases = _MEMORY_COMPLAINTS
+    if not all_cases or len(all_cases) < 5:
+        all_cases = _read_table("complaints")
+
+    res = evaluate_complaint_and_update_department_queue(
+        complaint=matched,
+        all_complaints=all_cases,
+        current_step="live_tracking_query"
+    )
+
+    return res
+

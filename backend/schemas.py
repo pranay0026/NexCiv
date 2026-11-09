@@ -93,6 +93,15 @@ class ComplaintResponse(BaseModel):
     reopened_count: Optional[int] = 0
     reopened_at: Optional[str] = None
     appealed: Optional[bool] = False
+    # Dynamic queue priority & action timeline extensions
+    queue_rank: Optional[int] = None
+    queue_total: Optional[int] = None
+    relative_percentile: Optional[float] = None
+    priority_explanation: Optional[str] = None
+    is_emergency_override: Optional[bool] = False
+    action_timeline: Optional[Dict[str, Any]] = None
+    priority_trajectory: Optional[List[Dict[str, Any]]] = None
+    estimated_resolution_time: Optional[str] = None
 
 
 class ImageVerificationRequest(BaseModel):

@@ -49,31 +49,39 @@ def record_investigation(
 
     saved = save_investigation(inv_dict)
 
-    # If employee marked issue as resolved, update the complaint status
-    if payload.is_resolved:
-        complaints = _read_table("complaints")
-        for c in complaints:
-            if c.get("id") == payload.complaint_id:
+    # Update complaint status and re-evaluate dynamic queue priority
+    complaints = _read_table("complaints")
+    for c in complaints:
+        if c.get("id") == payload.complaint_id:
+            if payload.is_resolved:
                 c["status"] = "resolved"
                 c["action_taken"] = payload.action_taken
                 c["resolution_summary"] = payload.findings
                 c["resolution_notes"] = payload.action_taken
                 c["resolved_at"] = datetime.utcnow().isoformat() + "Z"
-                save_complaint_isolated(c)
-                break
-        _write_table("complaints", complaints)
-    else:
-        # If unresolved, record as in_progress
-        complaints = _read_table("complaints")
-        for c in complaints:
-            if c.get("id") == payload.complaint_id:
+                inv_step = "field_investigation_resolved"
+            else:
                 c["status"] = "in_progress"
                 c["action_taken"] = payload.action_taken
                 if payload.inability_reason:
                     c["rejection_reason"] = payload.inability_reason
-                save_complaint_isolated(c)
-                break
-        _write_table("complaints", complaints)
+                inv_step = "field_investigation_in_progress"
+
+            # Dynamic Queue Prioritization & Timeline Refresh
+            try:
+                from dynamic_priority_timeline_engine import evaluate_complaint_and_update_department_queue
+                evaluate_complaint_and_update_department_queue(
+                    complaint=c,
+                    all_complaints=complaints,
+                    current_step=inv_step,
+                    step_notes=f"Ground investigation filed by {emp_name}. Findings: {payload.findings[:60]}"
+                )
+            except Exception as e_prio:
+                print(f"Dynamic priority investigation update note: {e_prio}")
+
+            save_complaint_isolated(c)
+            break
+    _write_table("complaints", complaints)
 
     return saved
 
@@ -129,6 +137,19 @@ def reopen_complaint(
             c["reopened_at"] = now_str
             c["reopen_reason"] = payload.reopen_reason
             c["updated_at"] = now_str
+
+            # Re-evaluate dynamic queue priority upon reopening
+            try:
+                from dynamic_priority_timeline_engine import evaluate_complaint_and_update_department_queue
+                evaluate_complaint_and_update_department_queue(
+                    complaint=c,
+                    all_complaints=complaints,
+                    current_step="citizen_reopen",
+                    step_notes=f"Reopened by citizen: {payload.reopen_reason}"
+                )
+            except Exception as e_reopen:
+                print(f"Reopen dynamic priority update note: {e_reopen}")
+
             save_complaint_isolated(c)
             matched = c
             break
@@ -144,11 +165,19 @@ def reopen_complaint(
         complaint_id=payload.complaint_id,
         actor_role="citizen",
         actor_name=actor_name,
-        action="Grievance Reopened by Citizen",
+        action="Grievance Reopened & Priority Re-evaluated",
         previous_status="resolved",
         new_status="pending",
-        comments=f"Reopen Reason: {payload.reopen_reason}",
-        metadata={"evidence_url": payload.evidence_url}
+        comments=(
+            f"Reopened: {payload.reopen_reason}. "
+            f"Re-evaluated Priority: {matched.get('priority')} ({matched.get('priority_score')}/100). "
+            f"Queue Rank #{matched.get('queue_rank', 1)} of {matched.get('queue_total', 1)}."
+        ),
+        metadata={
+            "evidence_url": payload.evidence_url,
+            "priority_score": matched.get("priority_score"),
+            "queue_rank": matched.get("queue_rank")
+        }
     )
 
     return {"message": "Grievance successfully reopened for investigation", "complaint": matched}
@@ -169,6 +198,19 @@ def escalate_complaint(
         if c.get("id") == payload.complaint_id:
             c["escalation_level"] = payload.escalation_level
             c["updated_at"] = datetime.utcnow().isoformat() + "Z"
+
+            # Dynamic Queue Prioritization & Timeline Shift on Escalation
+            try:
+                from dynamic_priority_timeline_engine import evaluate_complaint_and_update_department_queue
+                evaluate_complaint_and_update_department_queue(
+                    complaint=c,
+                    all_complaints=complaints,
+                    current_step=f"statutory_escalation_tier_{payload.escalation_level}",
+                    step_notes=f"Administrative escalation to Level {payload.escalation_level}: {payload.reason}"
+                )
+            except Exception as e_esc:
+                print(f"Escalation dynamic priority update note: {e_esc}")
+
             save_complaint_isolated(c)
             matched = c
             break
@@ -181,6 +223,23 @@ def escalate_complaint(
     esc_dict = payload.dict()
     esc_dict["escalated_from_id"] = current_user.get("id") or "system"
     saved = save_escalation(esc_dict)
+
+    record_activity_log(
+        complaint_id=payload.complaint_id,
+        actor_role="administration",
+        actor_name=current_user.get("name") or "Administrative Authority",
+        action=f"Escalation Level {payload.escalation_level} Dispatched",
+        comments=(
+            f"Escalated to Tier {payload.escalation_level}: {payload.reason}. "
+            f"Dynamic Priority Escalated: {matched.get('priority')} ({matched.get('priority_score')}/100), "
+            f"Queue Rank #{matched.get('queue_rank', 1)} of {matched.get('queue_total', 1)}."
+        ),
+        metadata={
+            "escalation_level": payload.escalation_level,
+            "priority_score": matched.get("priority_score"),
+            "queue_rank": matched.get("queue_rank")
+        }
+    )
 
     return {"message": "Administrative escalation dispatched", "escalation": saved}
 
