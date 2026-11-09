@@ -1,17 +1,28 @@
 import os
 import io
 import re
+import sys
 import base64
 import joblib
 import numpy as np
 from PIL import Image
 from typing import Dict, Any, Optional
 
+# Ensure project root is in path for ai preprocessing
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+try:
+    from ai.src.preprocess import clean_text_simple
+except ImportError:
+    clean_text_simple = lambda t: t.strip() if t else ""
+
 MODEL_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "models", "complaint_classifier", "nexciv_multimodal_priority_model.pkl"
+    os.path.dirname(__file__), "..", "models", "complaint_classifier", "complaint_classifier.pkl"
 )
 FALLBACK_MODEL_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "models", "complaint_classifier", "complaint_classifier.pkl"
+    os.path.dirname(__file__), "..", "models", "complaint_classifier", "nexciv_classifier_bundle.pkl"
 )
 
 DEPARTMENTS = {
@@ -398,77 +409,78 @@ class ComplaintClassifier:
         top_keywords = []
         text_score = 50.0
 
-        clean_text = text.strip() if text else ""
-        intent = self._analyze_multilingual_intent(clean_text)
+        clean_text = clean_text_simple(text) if text else ""
+        ml_prediction_succeeded = False
 
-        if intent:
-            wing = intent['wing']
-            wing_confidence = 0.98
-            complaint_type = intent['complaint_type']
-            complaint_type_conf = 0.96
-            priority = intent['priority']
-            priority_confidence = 0.95
-            all_probabilities = {code: 0.005 for code in DEPARTMENTS.keys()}
-            all_probabilities[wing] = 0.98
-            top_keywords = intent['matched']
-            prio_base_weights = {'Critical': 90.0, 'High': 75.0, 'Medium': 50.0, 'Low': 25.0}
-            text_score = prio_base_weights.get(priority, 75.0)
-        elif self._bundle is not None:
+        # PRIMARY DECISION PATH: Machine Learning Classifier
+        if self._bundle is not None and clean_text:
             try:
-                if isinstance(self._bundle, dict) and ('wing_pipeline' in self._bundle or 'pipeline' in self._bundle):
-                    wing_pipe = self._bundle.get('wing_pipeline') or self._bundle.get('pipeline')
-                    prio_pipe = self._bundle.get('prio_pipeline') or self._bundle.get('priority_pipeline')
+                wing_pipe = self._bundle.get('wing_pipeline') or self._bundle.get('pipeline')
+                if wing_pipe is not None:
+                    pred_wing = str(wing_pipe.predict([clean_text])[0])
+                    w_probs = wing_pipe.predict_proba([clean_text])[0]
+                    wing_conf = float(np.max(w_probs))
 
-                    if clean_text:
-                        wing = wing_pipe.predict([clean_text])[0]
-                        w_probs = wing_pipe.predict_proba([clean_text])[0]
-                        wing_confidence = float(np.max(w_probs))
+                    classes = wing_pipe.classes_
+                    all_probabilities = {
+                        str(cls): round(float(prob), 4)
+                        for cls, prob in zip(classes, w_probs)
+                    }
 
-                        # Build probabilities map for all departments
-                        classes = wing_pipe.classes_
-                        all_probabilities = {
-                            str(cls): round(float(prob), 4)
-                            for cls, prob in zip(classes, w_probs)
-                        }
+                    if wing_conf > 0.25:
+                        wing = pred_wing
+                        wing_confidence = wing_conf
+                        ml_prediction_succeeded = True
+                    else:
+                        # Model has zero active vocabulary features (uniform 0.20 tie); trigger fallback
+                        ml_prediction_succeeded = False
 
-                        # Predict Complaint Type if multi-task pipeline present
-                        type_pipe = self._bundle.get('complaint_type_pipeline')
-                        if type_pipe:
-                            try:
-                                complaint_type = type_pipe.predict([clean_text])[0]
-                                t_probs = type_pipe.predict_proba([clean_text])[0]
-                                complaint_type_conf = float(np.max(t_probs))
-                            except Exception:
-                                pass
-
-                        if prio_pipe is not None:
-                            try:
-                                priority = prio_pipe.predict([clean_text])[0]
-                                p_probs = prio_pipe.predict_proba([clean_text])[0]
-                                priority_confidence = float(np.max(p_probs))
-                            except Exception:
-                                pass
-
-                        prio_base_weights = {'Critical': 90.0, 'High': 75.0, 'Medium': 50.0, 'Low': 25.0}
-                        text_score = prio_base_weights.get(priority, 50.0) * priority_confidence + (1.0 - priority_confidence) * 50.0
-
-                        # Extract salient feature words from TF-IDF vectorizer
+                    # Multi-task Complaint Subtype prediction
+                    type_pipe = self._bundle.get('complaint_type_pipeline')
+                    if type_pipe:
                         try:
+                            complaint_type = str(type_pipe.predict([clean_text])[0])
+                            t_probs = type_pipe.predict_proba([clean_text])[0]
+                            complaint_type_conf = float(np.max(t_probs))
+                        except Exception:
+                            pass
+
+                    # Extract salient feature words from TF-IDF
+                    try:
+                        if 'tfidf' in wing_pipe.named_steps:
                             tfidf = wing_pipe.named_steps['tfidf']
                             feature_names = tfidf.get_feature_names_out()
                             vec = tfidf.transform([clean_text])
                             nonzeros = vec.nonzero()[1]
                             sorted_idx = sorted(nonzeros, key=lambda idx: vec[0, idx], reverse=True)
                             top_keywords = [str(feature_names[idx]) for idx in sorted_idx[:5]]
-                        except Exception:
-                            top_keywords = []
-                else:
-                    if clean_text:
-                        wing = self._bundle.predict([clean_text])[0]
-                        probs = self._bundle.predict_proba([clean_text])[0]
-                        wing_confidence = float(np.max(probs))
+                    except Exception:
+                        top_keywords = []
             except Exception as e:
-                print(f"Prediction error: {e}")
+                print(f"[CLASSIFIER] Machine learning inference error: {e}. Falling back to intent rules.")
+
+        # FALLBACK PATH: Multilingual Intent Rules (Used if ML unavailable or failed)
+        if not ml_prediction_succeeded:
+            intent = self._analyze_multilingual_intent(clean_text)
+            if intent:
+                wing = intent['wing']
+                wing_confidence = 0.88
+                complaint_type = intent['complaint_type']
+                complaint_type_conf = 0.85
+                priority = intent['priority']
+                priority_confidence = 0.80
+                all_probabilities = {code: 0.03 for code in DEPARTMENTS.keys()}
+                all_probabilities[wing] = 0.88
+                top_keywords = intent['matched']
+            else:
+                wing = 'others'
+                wing_confidence = 0.50
+                complaint_type = 'other_civic_issue'
+                complaint_type_conf = 0.50
+
+        # Estimate base priority score from category & text length
+        prio_base_weights = {'Critical': 90.0, 'High': 75.0, 'Medium': 50.0, 'Low': 25.0}
+        text_score = prio_base_weights.get(priority, 50.0)
 
         # 1. Computer vision evaluation
         image_meta = {}

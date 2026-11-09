@@ -1,0 +1,71 @@
+{
+  "model_name": "Linear SVM with Calibrated Modified Huber Loss",
+  "vectorizer": "Sublinear TF-IDF (Word n-grams 1-2 + Char n-grams 3-5)",
+  "samples": {
+    "train": 1640,
+    "validation": 328,
+    "test": 312
+  },
+  "metrics": {
+    "accuracy": 0.8814,
+    "macro_precision": 0.8786,
+    "macro_recall": 0.8813,
+    "macro_f1": 0.8795,
+    "weighted_f1": 0.8812
+  },
+  "per_class": {
+    "Public Health & Drainage": {
+      "precision": 0.8136,
+      "recall": 0.8571,
+      "f1-score": 0.8348,
+      "support": 56
+    },
+    "Sanitation & Solid Waste": {
+      "precision": 0.8305,
+      "recall": 0.875,
+      "f1-score": 0.8522,
+      "support": 56
+    },
+    "Roads & Buildings": {
+      "precision": 0.913,
+      "recall": 0.875,
+      "f1-score": 0.8936,
+      "support": 72
+    },
+    "Electrical & Street Lighting": {
+      "precision": 0.8947,
+      "recall": 0.9107,
+      "f1-score": 0.9027,
+      "support": 56
+    },
+    "Water Supply & Quality": {
+      "precision": 0.9412,
+      "recall": 0.8889,
+      "f1-score": 0.9143,
+      "support": 72
+    }
+  },
+  "language_breakdown": [
+    {
+      "Language Style": "Native Telugu (\u0c24\u0c46\u0c32\u0c41\u0c17\u0c41)",
+      "Code": "te",
+      "Samples": 102,
+      "Accuracy": "86.27%",
+      "Macro F1": "0.8580"
+    },
+    {
+      "Language Style": "English",
+      "Code": "en",
+      "Samples": 104,
+      "Accuracy": "88.46%",
+      "Macro F1": "0.8795"
+    },
+    {
+      "Language Style": "Romanized Telugu (Tenglish)",
+      "Code": "te_latn",
+      "Samples": 106,
+      "Accuracy": "89.62%",
+      "Macro F1": "0.8916"
+    }
+  ]
+}

@@ -1419,7 +1419,9 @@ export default function EmployeeWorkspace() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div className="p-4 rounded-xl bg-teal-50 border border-teal-100">
                     <span className="text-xs font-bold text-teal-700 uppercase">SLA Compliance</span>
-                    <div className="text-2xl font-black text-teal-900 mt-1">94.2%</div>
+                    <div className="text-2xl font-black text-teal-900 mt-1">
+                      {employeeStats?.completion_rate ? `${Math.round(employeeStats.completion_rate)}%` : `${resolutionRate}%`}
+                    </div>
                     <span className="text-[10px] text-teal-600 font-semibold">Exceeds state target</span>
                   </div>
 

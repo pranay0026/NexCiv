@@ -1,21 +1,9 @@
 {
-  "model_type": "LightGBM Regressor (Trained on 10,000 Real Grievances)",
-  "features_count": 511,
-  "mae": 0.037,
-  "rmse": 0.112,
-  "r2_score": 1.0,
-  "dataset_rows": 10000,
-  "cat_features": [
-    "cat_drainage",
-    "cat_others",
-    "cat_road",
-    "cat_street_lights",
-    "cat_water_supply"
-  ],
-  "bands": {
-    "Critical": "80-100 (Emergency fast-track dispatch)",
-    "High": "60-79 (Priority municipal roster)",
-    "Medium": "40-59 (Standard statutory SLA)",
-    "Low": "0-39 (Scheduled routine maintenance)"
-  }
+  "model_name": "NexCiv LightGBM Priority Regressor (Leakage-Free)",
+  "features": "NLP TF-IDF (800) + Department (5) + Zone (4) + Proof (1)",
+  "mae": 9.54,
+  "rmse": 14.77,
+  "r2_score": 0.5202,
+  "emergency_triage_recall": 0.3276,
+  "training_date": "2026-11-04"
 }

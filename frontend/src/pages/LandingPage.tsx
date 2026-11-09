@@ -723,7 +723,7 @@ export default function LandingPage() {
       {/* ============================================================ */}
       {/* 2. HERO SECTION (Panoromic City & Clean Typography)          */}
       {/* ============================================================ */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-sky-50/50 via-white to-slate-50 pt-10 pb-20 lg:pt-14 lg:pb-28 border-b border-slate-100">
+      <section className="relative overflow-hidden bg-gradient-to-b from-sky-50/50 via-white to-slate-50 pt-10 pb-12 lg:pt-14 lg:pb-16 border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             
@@ -798,55 +798,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
-      {/* ============================================================ */}
-      {/* 3. FLOATING STATS COUNTER RIBBON                             */}
-      {/* ============================================================ */}
-      <div className="max-w-6xl mx-auto px-4 -mt-10 sm:-mt-12 relative z-30 w-full">
-        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-5 sm:p-7 grid grid-cols-2 md:grid-cols-4 gap-6 items-center">
-          
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
-              <FileText size={24} />
-            </div>
-            <div>
-              <div className="text-2xl font-black text-slate-900 tracking-tight">12,450+</div>
-              <div className="text-xs text-slate-500 font-medium">Complaints Received</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <CheckCircle2 size={24} />
-            </div>
-            <div>
-              <div className="text-2xl font-black text-slate-900 tracking-tight">92%</div>
-              <div className="text-xs text-slate-500 font-medium">Classification Accuracy</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
-              <Building2 size={24} />
-            </div>
-            <div>
-              <div className="text-2xl font-black text-slate-900 tracking-tight">5</div>
-              <div className="text-xs text-slate-500 font-medium">Major Departments</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-              <Clock size={24} />
-            </div>
-            <div>
-              <div className="text-2xl font-black text-slate-900 tracking-tight">85%</div>
-              <div className="text-xs text-slate-500 font-medium">Resolved on Time</div>
-            </div>
-          </div>
-
-        </div>
-      </div>
 
       {/* ============================================================ */}
       {/* 4. COMMON COMPLAINT CATEGORIES                               */}

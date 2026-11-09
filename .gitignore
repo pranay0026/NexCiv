@@ -54,4 +54,8 @@ pnpm-debug.log*
 .system_generated/
 snap*.png
 backend/data/tables/
+~$*.docx
+*Backup*.docx
+
+
 

@@ -26,9 +26,20 @@ class CrossEncoderVerifier:
         self._load_model()
 
     def _load_model(self):
-        """Loads CrossEncoder with fallback."""
+        """Loads CrossEncoder with fallback, resolving local snapshots first."""
         try:
             from sentence_transformers import CrossEncoder
+            # Check local huggingface snapshot cache to avoid network hang
+            local_snap = Path(os.path.expanduser(r"~/.cache/huggingface/hub/models--cross-encoder--ms-marco-MiniLM-L-6-v2/snapshots"))
+            if local_snap.exists():
+                snaps = [d for d in local_snap.iterdir() if d.is_dir()]
+                if snaps:
+                    load_path = str(snaps[0])
+                    print(f"Loading cached CrossEncoder from: {load_path}...")
+                    self.model = CrossEncoder(load_path, max_length=512, device=self.device)
+                    print("Successfully loaded cached CrossEncoder.")
+                    return
+
             print(f"Loading Cross-Encoder model: {self.model_name} on device: {self.device}...")
             self.model = CrossEncoder(self.model_name, max_length=512, device=self.device)
             print(f"Successfully loaded Cross-Encoder: {self.model_name}")

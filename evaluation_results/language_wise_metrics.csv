@@ -1,0 +1,4 @@
+Language Style,Code,Samples,Accuracy,Macro F1
+Native Telugu (తెలుగు),te,102,85.29%,0.8450
+English,en,104,86.54%,0.8651
+Romanized Telugu (Tenglish),te_latn,106,89.62%,0.8916

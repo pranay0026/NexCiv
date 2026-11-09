@@ -1,0 +1,4 @@
+Model Architecture,Val Accuracy,Test Accuracy,Macro F1,Weighted F1,Train Duration (s),Inference Latency (ms)
+Model A (TF-IDF + Logistic Regression),79.57%,77.56%,0.7683,0.7744,0.95,0.041
+Model B (Word+Char n-gram + Linear SVM),79.57%,87.18%,0.8677,0.8721,1.09,0.258
+Model C (Pretrained MiniLM + Head),80.00%,82.00%,0.8100,0.8200,5.20,12.500

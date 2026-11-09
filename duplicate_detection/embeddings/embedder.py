@@ -28,9 +28,20 @@ class MultilingualEmbedder:
         self._load_model()
 
     def _load_model(self):
-        """Loads SentenceTransformer with fallback hierarchy."""
+        """Loads SentenceTransformer with fallback hierarchy, resolving local snapshots first."""
         try:
             from sentence_transformers import SentenceTransformer
+            # Check local huggingface snapshot cache to avoid network hang
+            local_snap = Path(os.path.expanduser(r"~/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2/snapshots"))
+            if local_snap.exists():
+                snaps = [d for d in local_snap.iterdir() if d.is_dir()]
+                if snaps:
+                    load_path = str(snaps[0])
+                    print(f"Loading cached SentenceTransformer from: {load_path}...")
+                    self.model = SentenceTransformer(load_path, device=self.device)
+                    print("Successfully loaded cached embedding model.")
+                    return
+
             print(f"Loading embedding model: {self.model_name} on device: {self.device}...")
             self.model = SentenceTransformer(self.model_name, device=self.device)
             print(f"Successfully loaded: {self.model_name}")

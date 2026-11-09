@@ -881,8 +881,8 @@ export default function ProfilePage() {
                         <Sparkles size={11} className="text-emerald-700" />
                         <span>Phase 3 AI Computer Vision Audit</span>
                       </span>
-                      <span className="bg-emerald-600 text-white px-1.5 py-0.2 rounded font-black text-[9px]">
-                        94.2% Passed
+                      <span className="bg-emerald-600 text-white px-2 py-0.5 rounded font-black text-[9px]">
+                        Verified
                       </span>
                     </div>
                     <p className="text-[10px] text-emerald-800">

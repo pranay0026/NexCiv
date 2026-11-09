@@ -78,7 +78,13 @@ def extract_pair_features(
     muni_b = str(record.get('muni_b', '')).strip().lower()
     muni_match = 1.0 if (muni_a == muni_b and muni_a != '') else (1.0 if not muni_a or not muni_b else 0.0)
 
-    ward_match = 1.0 if (str(ward_a).strip().lower() == str(ward_b).strip().lower() and ward_a) else 0.0
+    if ward_a and ward_b:
+        ward_match = 1.0 if str(ward_a).strip().lower() == str(ward_b).strip().lower() else 0.0
+    elif dist_m <= 150.0 and has_geo:
+        # Same localized radius (< 150m) belongs to the same ward boundary
+        ward_match = 1.0
+    else:
+        ward_match = 0.0
 
     # 6. Image Evidence
     hash_a = record.get('image_hash_a')

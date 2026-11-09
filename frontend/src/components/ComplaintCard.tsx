@@ -243,7 +243,7 @@ export default function ComplaintCard({
             {/* AI Confidence */}
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-mono font-bold flex items-center gap-1">
               <Cpu size={11} />
-              <span>{complaint.confidence ? `${Math.round(complaint.confidence * 100)}% Match` : '94% Match'}</span>
+              <span>{complaint.confidence ? `${Math.round(complaint.confidence * 100)}% Match` : 'AI Routed'}</span>
             </span>
 
             {/* Phase 2: Duplicate Badge */}

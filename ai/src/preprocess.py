@@ -4,20 +4,23 @@ Handles:
 1. Unicode NFC Normalization for Telugu script glyphs
 2. Regex noise & URL cleaning while preserving Telugu Unicode (\u0c00-\u0c7f)
 3. Zero-PII Sanitization (scrubs phone numbers, emails, door numbers)
-4. Language Style Detection: 'te' (Pure Telugu), 'en' (English), 'te_latn' (Romanized Telugu)
+4. Language Style Detection: 'te' (Native Telugu), 'en' (English), 'te_latn' (Romanized Telugu)
 """
 
 import re
 import unicodedata
 from typing import Dict, Any, Tuple
 
-# Telugu Lexicon for Romanized Style Detection
+# Comprehensive Telugu Lexicon for Romanized Style Detection
 TE_LATN_KEYWORDS = set([
-    'veedhi', 'veedhilo', 'guntalu', 'paddayi', 'kallu', 'neeru', 'ravatledu',
-    'ponguthondi', 'cheyandi', 'chala', 'motham', 'virigipoyi', 'ibbandi',
-    'ninna', 'daggara', 'eduruga', 'undi', 'ayindi', 'kottukupoyindi',
-    'chetha', 'kuppa', 'kullipoindi', 'padipoyindi', 'stambham', 'velagadam',
-    'tagalekapotunnam', 'neellu', 'intloki', 'drainage', 'road', 'current'
+    'veedhi', 'veedhilo', 'guntalu', 'gundalu', 'gothulu', 'paddayi', 'paddai', 'kallu',
+    'neeru', 'neellu', 'neelu', 'ravatledu', 'ravatle', 'ravadam', 'ravadamledu',
+    'ponguthondi', 'pongipoyi', 'cheyandi', 'chala', 'motham', 'virigipoyi', 'ibbandi',
+    'ninna', 'daggara', 'eduruga', 'undi', 'ayindi', 'kottukupoyindi', 'chetha', 'kuppa',
+    'kullipoindi', 'padipoyindi', 'padipotunnaru', 'stambham', 'velagadam', 'velagatle',
+    'velagatledu', 'tagalekapotunnam', 'intloki', 'intla', 'mundu', 'durgandham',
+    'kampu', 'goddalu', 'chikati', 'domalu', 'nundi', 'kuda', 'kani', 'enduku',
+    'ippudu', 'ventane', 'repair', 'pothole', 'drainage', 'road', 'current'
 ])
 
 TELUGU_STOPWORDS = set([
@@ -55,7 +58,7 @@ def detect_language_style(text: str) -> str:
     lower_words = re.findall(r'\b[a-zA-Z]+\b', text.lower())
     matches = sum(1 for w in lower_words if w in TE_LATN_KEYWORDS)
     if matches >= 1 and len(lower_words) > 0:
-        if matches / len(lower_words) >= 0.10 or matches >= 2:
+        if matches / len(lower_words) >= 0.08 or matches >= 2:
             return 'te_latn'
     
     return 'en'
@@ -70,7 +73,7 @@ def preprocess_complaint_text(
     Returns normalized text, detected language style, and sanitization flags.
     """
     if not isinstance(text, str):
-        return {'cleaned_text': '', 'language_style': 'en', 'pii_scrubbed': False}
+        return {'cleaned_text': '', 'original_text': '', 'language_style': 'en', 'pii_scrubbed': False}
 
     # Step 1: Unicode NFC Normalization
     normalized = unicodedata.normalize('NFC', text.strip())
@@ -93,7 +96,7 @@ def preprocess_complaint_text(
     cleaned = re.sub(r'[^\w\s\u0c00-\u0c7f]', ' ', cleaned)
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
 
-    # Step 6: Optional stopword removal (mainly for classic TF-IDF, not transformer)
+    # Step 6: Optional stopword removal
     if strip_stopwords:
         tokens = cleaned.split()
         if lang_style == 'te':
@@ -106,3 +109,7 @@ def preprocess_complaint_text(
         'language_style': lang_style,
         'pii_scrubbed': pii_scrubbed
     }
+
+def clean_text_simple(text: str) -> str:
+    """Convenience helper returning just the cleaned string."""
+    return preprocess_complaint_text(text, strip_stopwords=False, scrub_pii=True)['cleaned_text']

@@ -1,0 +1,53 @@
+{
+  "classes": [
+    "drainage",
+    "others",
+    "road",
+    "street_lights",
+    "water_supply"
+  ],
+  "class_names": [
+    "Public Health & Drainage",
+    "Sanitation & Solid Waste",
+    "Roads & Buildings",
+    "Electrical & Street Lighting",
+    "Water Supply & Quality"
+  ],
+  "matrix": [
+    [
+      46,
+      5,
+      1,
+      1,
+      3
+    ],
+    [
+      8,
+      44,
+      2,
+      0,
+      2
+    ],
+    [
+      3,
+      6,
+      60,
+      3,
+      0
+    ],
+    [
+      1,
+      0,
+      0,
+      53,
+      2
+    ],
+    [
+      3,
+      0,
+      0,
+      0,
+      69
+    ]
+  ]
+}

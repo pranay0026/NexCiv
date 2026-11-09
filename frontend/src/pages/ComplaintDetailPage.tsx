@@ -335,7 +335,7 @@ export default function ComplaintDetailPage() {
               <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">AI Classification</span>
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="text-xl font-black text-teal-600">
-                  {complaint.confidence ? `${Math.round(complaint.confidence * 100)}% Match` : '96% Match'}
+                  {complaint.confidence ? `${Math.round(complaint.confidence * 100)}% Match` : 'AI Routed'}
                 </span>
                 <span className="text-[10px] font-bold text-slate-500 uppercase">
                   ({complaint.category ? complaint.category.replace('_', ' ') : 'Civic Service'})

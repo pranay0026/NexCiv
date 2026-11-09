@@ -945,9 +945,17 @@ export default function AnalyticsPortal() {
   const exportReport = () => {
     const csvContent =
       'data:text/csv;charset=utf-8,' +
-      ['Metric,Value', 'Total Complaints,1284', 'Awaiting Assignment,46', 'Open Cases,312', 'Overdue Cases,27', 'Resolved this month,806', 'On-time Resolution,88%']
+      [
+        'Metric,Value',
+        `Total Complaints,${displayTotal}`,
+        `Awaiting Assignment,${displayAwaiting}`,
+        `In Progress,${displayInProgress}`,
+        `Overdue Cases,${displayOverdue}`,
+        `Resolved,${displayResolved}`,
+        `Resolution Rate,${displayRate}`
+      ]
         .concat(
-          INITIAL_EMPLOYEES.map(
+          employeesList.map(
             (e) => `"${e.name} (${e.department})",Completed: ${e.completed}, Pending: ${e.pending}, Rate: ${e.completionRate}%`
           )
         )
@@ -1851,7 +1859,7 @@ export default function AnalyticsPortal() {
               <div className="flex items-center gap-2 self-start lg:self-auto flex-wrap">
                 <span className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-teal-300 flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-                  NLP Routing Engine: 100% Calibrated
+                  NLP Routing Engine: Calibrated
                 </span>
                 <span className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-emerald-300 flex items-center gap-1.5">
                   <ShieldCheck size={14} className="text-emerald-400" />
@@ -1864,13 +1872,13 @@ export default function AnalyticsPortal() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
               <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
                 <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Department Routing</span>
-                <div className="text-2xl font-black text-white mt-1">100%</div>
-                <div className="text-[11px] text-teal-300 mt-0.5">Calibrated across 5 depts</div>
+                <div className="text-2xl font-black text-white mt-1">88.1%</div>
+                <div className="text-[11px] text-teal-300 mt-0.5">Audited across 5 depts</div>
               </div>
 
               <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
                 <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Duplicate Deflection</span>
-                <div className="text-2xl font-black text-amber-300 mt-1">34.8%</div>
+                <div className="text-2xl font-black text-amber-300 mt-1">Active</div>
                 <div className="text-[11px] text-slate-300 mt-0.5">Merged via Haversine & dHash</div>
               </div>
 

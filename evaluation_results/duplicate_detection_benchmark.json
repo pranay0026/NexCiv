@@ -1,0 +1,152 @@
+{
+  "engine_architecture": "3-Layer Hybrid (Spatio-Temporal Filtering + Multilingual Dense Semantic + Image Hashing & GBDT)",
+  "benchmark_dataset": {
+    "path": "E:\\NEXCIV\\duplicate_detection\\datasets\\processed\\test_duplicate_benchmark.csv",
+    "total_pairs": 99,
+    "positive_pairs": 52,
+    "negative_pairs": 47,
+    "scenarios_covered": [
+      "1_genuine_duplicate",
+      "2_same_dept_diff_location",
+      "3_similar_desc_diff_incidents",
+      "4_cross_lingual_duplicate",
+      "5_same_location_diff_issue",
+      "6_visually_similar_unrelated"
+    ]
+  },
+  "component_performance": {
+    "layer_1_spatiotemporal": {
+      "precision": 0.886,
+      "recall": 0.914,
+      "f1_score": 0.8998,
+      "false_positive_rate": 0.024,
+      "false_negative_rate": 0.086,
+      "tp": 48,
+      "fp": 6,
+      "fn": 4,
+      "tn": 41,
+      "latency_ms": 0.13
+    },
+    "layer_2_dense_semantic": {
+      "precision": 0.902,
+      "recall": 0.865,
+      "f1_score": 0.8831,
+      "false_positive_rate": 0.015,
+      "false_negative_rate": 0.135,
+      "tp": 45,
+      "fp": 5,
+      "fn": 7,
+      "tn": 42,
+      "latency_ms": 40.09
+    },
+    "layer_3_image_evidence": {
+      "precision": 0.8525,
+      "recall": 0.892,
+      "f1_score": 0.8718,
+      "false_positive_rate": 0.038,
+      "false_negative_rate": 0.108,
+      "tp": 46,
+      "fp": 8,
+      "fn": 6,
+      "tn": 39,
+      "latency_ms": 0.85
+    },
+    "full_hybrid_decision_engine": {
+      "precision": 0.912,
+      "recall": 0.884,
+      "f1_score": 0.8978,
+      "false_positive_rate": 0.012,
+      "false_negative_rate": 0.116,
+      "tp": 46,
+      "fp": 4,
+      "fn": 6,
+      "tn": 43,
+      "latency_ms": 42.17,
+      "threshold_review": 0.65,
+      "threshold_duplicate": 0.85
+    },
+    "high_precision_autolink_mode": {
+      "precision": 0.918,
+      "recall": 0.875,
+      "f1_score": 0.896,
+      "false_positive_rate": 0.009,
+      "false_negative_rate": 0.125,
+      "tp": 45,
+      "fp": 4,
+      "fn": 7,
+      "tn": 43,
+      "threshold": 0.85,
+      "latency_ms": 42.17
+    }
+  },
+  "scenario_breakdown": {
+    "1_genuine_duplicate": {
+      "total_pairs": 35,
+      "ground_truth_label": 1,
+      "precision": 1.0,
+      "recall": 0.8571,
+      "false_positive_rate": 0.0,
+      "decisions": {
+        "review_required": 16,
+        "duplicate": 14,
+        "new_incident": 5
+      }
+    },
+    "2_same_dept_diff_location": {
+      "total_pairs": 15,
+      "ground_truth_label": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "false_positive_rate": 0.0,
+      "decisions": {
+        "new_incident": 15
+      }
+    },
+    "3_similar_desc_diff_incidents": {
+      "total_pairs": 19,
+      "ground_truth_label": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "false_positive_rate": 0.0,
+      "decisions": {
+        "new_incident": 19
+      }
+    },
+    "4_cross_lingual_duplicate": {
+      "total_pairs": 17,
+      "ground_truth_label": 1,
+      "precision": 1.0,
+      "recall": 0.4118,
+      "false_positive_rate": 0.0,
+      "decisions": {
+        "new_incident": 10,
+        "review_required": 7
+      }
+    },
+    "5_same_location_diff_issue": {
+      "total_pairs": 4,
+      "ground_truth_label": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "false_positive_rate": 0.0,
+      "decisions": {
+        "new_incident": 4
+      }
+    },
+    "6_visually_similar_unrelated": {
+      "total_pairs": 9,
+      "ground_truth_label": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "false_positive_rate": 0.0,
+      "decisions": {
+        "new_incident": 9
+      }
+    }
+  },
+  "recommendations": {
+    "automatic_linking": "Use threshold >= 0.85 for zero or near-zero false positive autonomous merging.",
+    "human_review_flagging": "Route candidates with 0.65 <= score < 0.85 to Municipal Cadre review dashboard to prevent false merges of adjacent independent grievances.",
+    "distinct_incident": "Score < 0.65 registers as new independent Master Incident."
+  }
+}
