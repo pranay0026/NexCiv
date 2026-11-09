@@ -552,15 +552,15 @@ export const api = {
     };
   },
 
-  async loginEmployee(employeeCode: string, password = 'emp@123') {
+  async loginEmployee(employeeCode: string, password = 'emp@123', municipalityCode = 'ELR') {
     const cleanCode = employeeCode.trim().toUpperCase();
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3500);
+      const timer = setTimeout(() => controller.abort(), 4000);
       const res = await fetch(`${API_URL}/api/auth/employee-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employee_code: cleanCode, password }),
+        body: JSON.stringify({ employee_code: cleanCode, password, municipality_code: municipalityCode }),
         signal: controller.signal
       });
       clearTimeout(timer);
@@ -571,17 +571,103 @@ export const api = {
       console.warn('Backend employee login fallback active:', e);
     }
 
-    // Resilient offline/deployment fallback
-    const emp = (AP_40_EMPLOYEES as any[]).find(e => e.employee_code.toUpperCase() === cleanCode);
+    // Resilient offline/deployment fallback across ALL AP municipalities
+    // 1. Detect municipality from code tokens if present, else fallback to provided municipalityCode
+    const tokens = cleanCode.replace(/_/g, '-').split('-').filter(Boolean);
+    let targetMuni = municipalityCode || 'ELR';
+    for (const t of tokens) {
+      if (AP_CORPORATIONS.some(c => c.code === t)) {
+        targetMuni = t;
+        break;
+      }
+    }
+
+    // 2. Check getMunicipalityCadre for target municipality
+    const cadre = getMunicipalityCadre(targetMuni);
+    let emp = cadre.find((e: any) => e.employee_code.toUpperCase() === cleanCode || e.id.toUpperCase() === cleanCode);
+
+    // 3. Check AP_40_EMPLOYEES
     if (!emp) {
-      throw new Error(`Employee ID "${cleanCode}" not found in AP Municipal Cadre.`);
+      emp = (AP_40_EMPLOYEES as any[]).find(e => e.employee_code.toUpperCase() === cleanCode);
+    }
+
+    // 4. Check alias / suffix match (e.g. DEMO-EMP-RD-02 matching DEMO-ELR-RD-02 or RD-02)
+    if (!emp) {
+      const suffix = tokens.slice(-2).join('-');
+      emp = cadre.find((e: any) => suffix && e.employee_code.toUpperCase().endsWith(`-${suffix}`));
+    }
+
+    // 5. Synthesize robust AP Cadre profile on-the-fly for ANY AP municipality
+    if (!emp) {
+      let dept = 'road';
+      let deptName = 'Roads & Buildings Department';
+      let designation = 'Municipal Assistant Engineer (Roads & Bridges)';
+
+      if (tokens.some(t => ['RD', 'ROAD', 'ROADS'].includes(t))) {
+        dept = 'road';
+        deptName = 'Roads & Buildings Department';
+        designation = 'Municipal Assistant Engineer (Roads & Bridges)';
+      } else if (tokens.some(t => ['WS', 'WATER', 'WTR'].includes(t))) {
+        dept = 'water_supply';
+        deptName = 'Water Supply & Quality Department';
+        designation = 'Municipal Assistant Engineer (Water Supply & Quality)';
+      } else if (tokens.some(t => ['DR', 'DRAIN', 'DRAINAGE', 'SEW'].includes(t))) {
+        dept = 'drainage';
+        deptName = 'Drainage & Sewerage Department';
+        designation = 'Municipal Assistant Engineer (Drainage & Flood Control)';
+      } else if (tokens.some(t => ['SL', 'LIGHT', 'LIGHTS', 'ELEC'].includes(t))) {
+        dept = 'street_lights';
+        deptName = 'Electrical & Street Lighting Department';
+        designation = 'Assistant Engineer (Electrical & Grid Operations)';
+      } else if (tokens.some(t => ['SN', 'PH', 'SAN', 'SANITATION'].includes(t))) {
+        dept = 'others';
+        deptName = 'Public Health & Sanitation Department';
+        designation = 'Sanitary Inspector & Public Health Officer';
+      }
+
+      emp = {
+        id: `emp-${cleanCode.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+        employee_code: cleanCode,
+        name: `[DEMO] Municipal Officer (${cleanCode})`,
+        initials: 'MO',
+        email: `${cleanCode.toLowerCase().replace(/[^a-z0-9]/g, '.')}@nexciv.ap.gov.in`,
+        phone: '+91 94401 10002',
+        municipality_code: targetMuni,
+        department: dept,
+        department_name: deptName,
+        designation: `${designation} — ${targetMuni}`,
+        zone: `${targetMuni} Municipal Jurisdiction`,
+        status: 'active',
+        assigned_count: 5,
+        completed_count: 20,
+        pending_count: 3,
+        overdue_count: 0,
+        avg_resolution_days: 1.8,
+        completion_rate: 90.0,
+        rating: 4.8,
+        performance: 'On track',
+        skills: 'Grievance Inspection & Statutory Resolution',
+        password: 'emp@123'
+      };
     }
 
     return {
       access_token: `emp-token-${cleanCode.toLowerCase()}`,
       token_type: 'bearer',
       role: 'employee',
-      employee: emp
+      employee: emp,
+      user: {
+        id: emp.id,
+        employee_code: emp.employee_code,
+        name: emp.name,
+        email: emp.email,
+        role: 'employee',
+        department: emp.department,
+        department_name: emp.department_name,
+        designation: emp.designation,
+        zone: emp.zone,
+        municipality_code: emp.municipality_code || targetMuni
+      }
     };
   },
 
@@ -1464,15 +1550,26 @@ export const api = {
       }
     } catch {}
 
-    // Extract municipality prefix if code is in format ELR-EMP-101
-    const parts = clean.split('-');
-    const corpCode = (parts.length >= 3) ? parts[0] : 'ELR';
+    // Extract municipality prefix across code tokens (e.g. DEMO-GVMC-RD-01 -> GVMC, DEMO-EMP-RD-02 -> ELR)
+    const parts = clean.replace(/_/g, '-').split('-').filter(Boolean);
+    let corpCode = 'ELR';
+    for (const p of parts) {
+      if (AP_CORPORATIONS.some(c => c.code === p)) {
+        corpCode = p;
+        break;
+      }
+    }
     const municipalityList = getMunicipalityCadre(corpCode) as EmployeeRecord[];
 
     const emp = municipalityList.find(
-      e => e.employee_code.toUpperCase() === clean || e.id === clean || e.employee_code.toUpperCase().endsWith(clean)
+      e => e.employee_code.toUpperCase() === clean || e.id.toUpperCase() === clean || e.employee_code.toUpperCase().endsWith(clean)
     );
     if (emp) return emp;
+
+    // Suffix match (e.g. DEMO-EMP-RD-02 matching RD-02)
+    const suffix = parts.slice(-2).join('-');
+    const suffixMatch = municipalityList.find(e => suffix && e.employee_code.toUpperCase().endsWith(`-${suffix}`));
+    if (suffixMatch) return suffixMatch;
 
     return municipalityList[0] || (AP_40_EMPLOYEES as EmployeeRecord[])[0];
   },

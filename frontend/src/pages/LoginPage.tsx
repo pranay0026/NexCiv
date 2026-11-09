@@ -161,7 +161,7 @@ export default function LoginPage() {
 
     const targetCode = (customEmpCode.trim() || selectedEmpCode).toUpperCase();
     if (!targetCode) {
-      setEmployeeError('Please select or enter your Employee Code (e.g. EMP-101).');
+      setEmployeeError('Please select or enter your Employee Code (e.g. DEMO-EMP-RD-02, EMP-101).');
       return;
     }
     if (!employeePassword.trim()) {
@@ -172,8 +172,9 @@ export default function LoginPage() {
     setLoggingInEmp(true);
     const emp = employees.find(em => em.employee_code.toUpperCase() === targetCode);
 
+    let authResult: any = null;
     try {
-      await api.loginEmployee(targetCode, employeePassword);
+      authResult = await api.loginEmployee(targetCode, employeePassword, selectedEmpMunicipality);
     } catch (err: any) {
       console.warn("Backend auth note:", err);
       if (err.message && err.message.includes('not found')) {
@@ -183,12 +184,13 @@ export default function LoginPage() {
       }
     }
 
+    const resolvedEmp = authResult?.employee || authResult?.user || emp;
     loginAsEmployee(
       targetCode,
-      emp?.name || `Officer (${targetCode})`,
-      emp?.department || 'road',
-      emp?.designation || 'Municipal Engineer',
-      selectedEmpMunicipality
+      resolvedEmp?.name || `Officer (${targetCode})`,
+      resolvedEmp?.department || 'road',
+      resolvedEmp?.designation || 'Municipal Engineer',
+      resolvedEmp?.municipality_code || selectedEmpMunicipality
     );
     setLoggingInEmp(false);
   };
@@ -661,15 +663,18 @@ export default function LoginPage() {
                       const val = e.target.value;
                       setCustomEmpCode(val);
                       setSelectedEmpCode('');
-                      // Auto-detect municipality prefix if typed e.g. GVMC-EMP-101
+                      // Auto-detect municipality from any token if typed e.g. DEMO-GVMC-RD-01 or GVMC-EMP-101
                       if (val.includes('-')) {
-                        const prefix = val.split('-')[0].toUpperCase();
-                        if (AP_CORPORATIONS.some(c => c.code === prefix) && prefix !== selectedEmpMunicipality) {
-                          setSelectedEmpMunicipality(prefix);
+                        const parts = val.toUpperCase().split(/[-_]/);
+                        for (const part of parts) {
+                          if (AP_CORPORATIONS.some(c => c.code === part) && part !== selectedEmpMunicipality) {
+                            setSelectedEmpMunicipality(part);
+                            break;
+                          }
                         }
                       }
                     }}
-                    placeholder={`e.g. ${selectedEmpMunicipality}-EMP-101`}
+                    placeholder={`e.g. DEMO-EMP-RD-02, ${selectedEmpMunicipality}-EMP-101`}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold uppercase text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none"
                   />
                   <div className="mt-1.5">

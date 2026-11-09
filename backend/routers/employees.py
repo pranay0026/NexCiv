@@ -103,23 +103,27 @@ def get_employee(
     id_or_code: str,
     supabase: Client = Depends(get_supabase)
 ):
-    """Fetches single employee by UUID or employee code (e.g. EMP-101)."""
+    """Fetches single employee by UUID or employee code (e.g. EMP-101, DEMO-EMP-RD-02, DEMO-ELR-RD-02, DEMO-GVMC-RD-01)."""
     # 1. Try Supabase
     if supabase is not None:
         try:
-            if id_or_code.startswith("EMP-"):
-                res = supabase.table("employees").select("*").eq("employee_code", id_or_code).execute()
-            else:
-                res = supabase.table("employees").select("*").eq("id", id_or_code).execute()
+            res = supabase.table("employees").select("*").or_(f"employee_code.ilike.{id_or_code},id.eq.{id_or_code}").execute()
             if res.data and len(res.data) > 0:
                 return res.data[0]
         except Exception:
             pass
 
     # 2. Check local memory
+    clean_code = id_or_code.strip().upper()
     for emp in _MEMORY_EMPLOYEES:
-        if emp.get("id") == id_or_code or emp.get("employee_code") == id_or_code:
+        if emp.get("id") == id_or_code or (emp.get("employee_code") or "").upper() == clean_code:
             return emp
+
+    # 3. Universal Cadre Resolver (seeded tables & on-the-fly multi-municipality cadre)
+    from data_manager import resolve_or_create_cadre_employee
+    resolved = resolve_or_create_cadre_employee(id_or_code)
+    if resolved:
+        return resolved
 
     raise HTTPException(status_code=404, detail=f"Employee {id_or_code} not found")
 
@@ -128,10 +132,12 @@ def find_employee_record(id_or_code: str) -> Optional[Dict[str, Any]]:
     """Helper to find an employee dictionary by ID or code across all municipal registries."""
     if not id_or_code:
         return None
+    clean_code = id_or_code.strip().upper()
     for emp in _MEMORY_EMPLOYEES:
-        if emp.get("id") == id_or_code or emp.get("employee_code") == id_or_code:
+        if emp.get("id") == id_or_code or (emp.get("employee_code") or "").upper() == clean_code:
             return emp
-    return None
+    from data_manager import resolve_or_create_cadre_employee
+    return resolve_or_create_cadre_employee(id_or_code)
 
 @router.post("", response_model=EmployeeResponse)
 def create_employee(

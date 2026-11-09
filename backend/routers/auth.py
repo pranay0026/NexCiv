@@ -17,8 +17,9 @@ class DepartmentLoginPayload(BaseModel):
     password: str
 
 class EmployeeLoginPayload(BaseModel):
-    employee_code: str  # e.g., 'EMP-101'
+    employee_code: str  # e.g., 'DEMO-EMP-RD-02', 'DEMO-ELR-RD-02', 'GVMC-EMP-101', 'EMP-101'
     password: str
+    municipality_code: Optional[str] = None
 
 @router.get("/corporations")
 def list_ap_corporations():
@@ -76,7 +77,8 @@ def department_login(payload: DepartmentLoginPayload):
 @router.post("/employee-login")
 def employee_login(payload: EmployeeLoginPayload, supabase: Client = Depends(get_supabase)):
     """
-    Employee Portal login for municipal officers and field crew (EMP-101 to EMP-140+).
+    Employee Portal login for municipal officers and field crew across ALL Andhra Pradesh municipalities
+    (e.g. DEMO-EMP-RD-02, DEMO-ELR-RD-02, DEMO-GVMC-RD-01, DEMO-VMC-WS-01, EMP-101 to EMP-140+).
     """
     if not payload.password or not payload.password.strip():
         raise HTTPException(
@@ -85,46 +87,24 @@ def employee_login(payload: EmployeeLoginPayload, supabase: Client = Depends(get
         )
 
     code = payload.employee_code.strip().upper()
-    emp = None
+    muni_hint = payload.municipality_code
 
-    # 1. Check Supabase
-    if supabase is not None:
-        try:
-            res = supabase.table("employees").select("*").eq("employee_code", code).execute()
-            if res.data and len(res.data) > 0:
-                emp = res.data[0]
-        except Exception:
-            pass
+    # 1. Use Universal Cadre Resolver (handles DEMO-EMP-RD-02, DEMO-{MUNI}-{DEPT}-{NUM}, {MUNI}-EMP-{NUM}, etc.)
+    from data_manager import resolve_or_create_cadre_employee
+    emp = resolve_or_create_cadre_employee(code, municipality_hint=muni_hint)
 
-    # 2. Check local memory
+    # 2. Check local memory cache as secondary fallback
     if not emp:
         for item in _MEMORY_EMPLOYEES:
             if item.get("employee_code", "").upper() == code or item.get("id") == code:
                 emp = item
                 break
-            
+
     if not emp:
-        # If code matches pattern EMP-xxx, allow access
-        if code.startswith("EMP-"):
-            emp = {
-                "id": f"emp-{code.lower()}",
-                "employee_code": code,
-                "name": f"Municipal Officer ({code})",
-                "email": f"{code.lower()}@nexciv.ap.gov.in",
-                "department": "road",
-                "department_name": "Roads & Buildings Department",
-                "designation": "Assistant Executive Engineer (AEE)",
-                "zone": "Zone 1",
-                "status": "active",
-                "assigned_count": 0,
-                "completed_count": 0,
-                "pending_count": 0
-            }
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Employee with code '{code}' not found in Andhra Pradesh Cadre registry."
-            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Employee with code '{code}' not found in Andhra Pradesh Cadre registry."
+        )
 
     token = f"demo-employee-{emp.get('employee_code', code).lower()}"
     return {
@@ -140,7 +120,8 @@ def employee_login(payload: EmployeeLoginPayload, supabase: Client = Depends(get
             "department": emp.get("department"),
             "department_name": emp.get("department_name"),
             "designation": emp.get("designation"),
-            "zone": emp.get("zone")
+            "zone": emp.get("zone"),
+            "municipality_code": emp.get("municipality_code", muni_hint or "ELR")
         },
         "employee": emp
     }
